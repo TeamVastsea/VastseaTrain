@@ -120,7 +120,7 @@ Create 的运行时轨道网络与本模组自有拓扑可能采用不同模型�
 1. 先更新本文件/模块文档中对应阶段和验收，再实现可独立检查的小步骤。
 2. 几何、参数和 manifest 校验优先写不启动游戏的单元测试；Forge 注册与渲染再用 IDEA 手动游戏验证。
 3. 本地检查：`./gradlew build --no-daemon`（Windows 使用 `./gradlew.bat build --no-daemon`）。
-4. `build` 通过后立即提交并推送；GitHub Actions 对 `main` push、PR 和手动触发执行同一构建。
+4. `build` 通过后立即创建正常提交并使用普通 `git push` 推送；保持线性项目历史，不使用强制推送或改写远端历史。GitHub Actions 对 `main` push、PR 和手动触发执行同一构建。
 5. 检查远端 Actions 对应提交的结论。远端失败时先读失败步骤，修复后重建，再立即上传。
 6. 除非用户明确要求，不运行 `runClient`、`runServer` 或 GameTest 启动器；游戏内验证由用户在 IDEA 执行。
 
