@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vastseatrain.dev/schema/community-model-manifest-0.1.0.json",
+  "title": "VastseaTrain Community Model Manifest",
+  "description": "Draft manifest format for namespace-isolated community model entries.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "namespace",
+    "type",
+    "displayName",
+    "author",
+    "license",
+    "version",
+    "apiVersion",
+    "supportedModVersions",
+    "dependencies",
+    "model",
+    "textures",
+    "animations",
+    "preview",
+    "tags",
+    "parameters"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "namespace": {
+      "$ref": "#/$defs/namespace"
+    },
+    "type": {
+      "enum": [
+        "track",
+        "track_part",
+        "train",
+        "catenary",
+        "platform",
+        "signal",
+        "schedule",
+        "custom"
+      ]
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "version": {
+      "$ref": "#/$defs/semver"
+    },
+    "apiVersion": {
+      "$ref": "#/$defs/semver"
+    },
+    "supportedModVersions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dependency"
+      },
+      "uniqueItems": true
+    },
+    "model": {
+      "$ref": "#/$defs/resourceId"
+    },
+    "textures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resourceId"
+      },
+      "uniqueItems": true
+    },
+    "animations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resourceId"
+      },
+      "uniqueItems": true
+    },
+    "preview": {
+      "$ref": "#/$defs/resourceId"
+    },
+    "tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9_.-]{0,31}$"
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Type-specific data. Runtime validation is defined by the model type and API version.",
+      "default": {},
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "namespace": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "resourceId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}:(?!.*\\.\\.)[a-z0-9][a-z0-9_./-]{0,191}$"
+    },
+    "dependency": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}:[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "modId",
+            "required"
+          ],
+          "properties": {
+            "modId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$"
+            },
+            "versionRange": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

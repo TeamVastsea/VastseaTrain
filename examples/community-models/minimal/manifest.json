@@ -1,0 +1,56 @@
+{
+  "id": "sample_track",
+  "namespace": "example",
+  "type": "track",
+  "displayName": "Example Track",
+  "author": "Example Author",
+  "license": "CC-BY-4.0",
+  "version": "0.1.0",
+  "apiVersion": "0.1.0",
+  "supportedModVersions": [
+    "0.1.x"
+  ],
+  "dependencies": [],
+  "model": "example:models/community/track/sample_track/model.json",
+  "textures": [
+    "example:textures/community/track/sample_track/track.png"
+  ],
+  "animations": [],
+  "preview": "example:textures/community/track/sample_track/preview.png",
+  "tags": [
+    "track",
+    "sample"
+  ],
+  "parameters": {
+    "lengthMeters": 1.0,
+    "gaugeMillimeters": 1435,
+    "endpoints": [
+      {
+        "name": "start",
+        "position": [
+          0.0,
+          0.0,
+          -0.5
+        ],
+        "direction": [
+          0.0,
+          0.0,
+          -1.0
+        ]
+      },
+      {
+        "name": "end",
+        "position": [
+          0.0,
+          0.0,
+          0.5
+        ],
+        "direction": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-package com.vastsea.vastseatrain;
+package com.fastjim.vastseatrain;
 
 import net.minecraftforge.fml.common.Mod;
 
