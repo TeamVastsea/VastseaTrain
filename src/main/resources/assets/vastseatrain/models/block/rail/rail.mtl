@@ -1,0 +1,53 @@
+# VastseaTrain rail segment material library
+# Material names match the exported OBJ groups; textures use full resource locations
+# so Forge's OBJ loader resolves them directly instead of guessing a relative path.
+
+newmtl Material_#80
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd vastseatrain:block/rail/gravel
+
+newmtl Material_#81
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd vastseatrain:block/rail/concrete_silver
+
+newmtl Material_#82
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd vastseatrain:block/rail/rail_side
+
+newmtl Material_#83
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd vastseatrain:block/rail/rail_top
+
+newmtl Material_#84
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd vastseatrain:block/rail/rail_web

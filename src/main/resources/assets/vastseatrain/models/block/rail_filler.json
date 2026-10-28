@@ -1,0 +1,7 @@
+{
+  "parent": "vastseatrain:block/rail/rail_obj",
+  "visibility": {
+    "RAIL_LEFT_b": false,
+    "RAIL_RIGHT_b": false
+  }
+}

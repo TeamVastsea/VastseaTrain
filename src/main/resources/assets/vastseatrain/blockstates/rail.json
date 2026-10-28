@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north,curved=false,model=true":  { "model": "vastseatrain:block/rail_core", "y": 180 },
+    "facing=east,curved=false,model=true":   { "model": "vastseatrain:block/rail_core", "y": 270 },
+    "facing=south,curved=false,model=true":  { "model": "vastseatrain:block/rail_core" },
+    "facing=west,curved=false,model=true":   { "model": "vastseatrain:block/rail_core", "y": 90 },
+    "facing=north,curved=true,model=true":   { "model": "vastseatrain:block/rail_core", "y": 180 },
+    "facing=east,curved=true,model=true":    { "model": "vastseatrain:block/rail_core", "y": 270 },
+    "facing=south,curved=true,model=true":   { "model": "vastseatrain:block/rail_core" },
+    "facing=west,curved=true,model=true":    { "model": "vastseatrain:block/rail_core", "y": 90 },
+    "facing=north,curved=false,model=false": { "model": "vastseatrain:block/rail_filler", "y": 180 },
+    "facing=east,curved=false,model=false":  { "model": "vastseatrain:block/rail_filler", "y": 270 },
+    "facing=south,curved=false,model=false": { "model": "vastseatrain:block/rail_filler" },
+    "facing=west,curved=false,model=false":  { "model": "vastseatrain:block/rail_filler", "y": 90 },
+    "facing=north,curved=true,model=false":  { "model": "vastseatrain:block/rail_filler", "y": 180 },
+    "facing=east,curved=true,model=false":   { "model": "vastseatrain:block/rail_filler", "y": 270 },
+    "facing=south,curved=true,model=false":  { "model": "vastseatrain:block/rail_filler" },
+    "facing=west,curved=true,model=false":   { "model": "vastseatrain:block/rail_filler", "y": 90 }
+  }
+}

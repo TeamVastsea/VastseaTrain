@@ -1,0 +1,50 @@
+{
+  "itemGroup.vastseatrain": "Vastsea Rail Transit",
+
+  "item.vastseatrain.track_blueprint": "Track Blueprint",
+  "item.vastseatrain.rail": "Rail Segment",
+  "item.vastseatrain.rail_slab": "Rail Bed",
+
+  "block.vastseatrain.rail": "Rail Segment",
+  "block.vastseatrain.rail_slab": "Rail Bed",
+
+  "screen.vastseatrain.blueprint": "Track Blueprint",
+  "gui.vastseatrain.section.track": "Track",
+  "gui.vastseatrain.section.bed": "Bed & Preview",
+  "gui.vastseatrain.section.summary": "Summary",
+  "gui.vastseatrain.length": "Length (segments)",
+  "gui.vastseatrain.length_value": "Length: %s segments",
+  "gui.vastseatrain.gauge": "Gauge: %s",
+  "gui.vastseatrain.bed": "Bed: %s",
+  "gui.vastseatrain.preview": "Preview: %s",
+  "gui.vastseatrain.on": "On",
+  "gui.vastseatrain.off": "Off",
+  "gui.vastseatrain.curve_soon": "Curves (coming soon)",
+  "gui.vastseatrain.apply": "Done",
+  "gui.vastseatrain.hint": "Right-click the ground to lay track, right-click air to reopen this screen",
+
+  "gauge.vastseatrain.standard": "Standard 1435 mm",
+  "gauge.vastseatrain.narrow": "Narrow 1000 mm",
+  "gauge.vastseatrain.broad": "Broad 1676 mm",
+
+  "bed.vastseatrain.gravel": "Gravel",
+  "bed.vastseatrain.concrete": "Concrete",
+  "bed.vastseatrain.none": "None",
+
+  "tooltip.vastseatrain.length": "Length: %s segments",
+  "tooltip.vastseatrain.gauge": "Gauge: %s",
+  "tooltip.vastseatrain.bed": "Bed: %s",
+  "tooltip.vastseatrain.usage": "Right-click air to configure, ground to lay",
+
+  "summary.vastseatrain.length": "Segments: %s",
+  "summary.vastseatrain.blocks": "Blocks along line: %s",
+  "summary.vastseatrain.width": "Width: %s blocks",
+  "summary.vastseatrain.gauge": "Gauge: %s",
+  "summary.vastseatrain.bed": "Bed: %s",
+
+  "message.vastseatrain.placed": "Laid %s straight segments",
+  "message.vastseatrain.blocked": "Blocked at (%s, %s, %s); placement cancelled",
+  "message.vastseatrain.out_of_world": "Out of world bounds at (%s, %s)",
+  "message.vastseatrain.no_ground_at": "No support below (%s, %s, %s); placement cancelled",
+  "message.vastseatrain.bed_sample": "Sampled block: %s (bed appearance switching comes later)"
+}

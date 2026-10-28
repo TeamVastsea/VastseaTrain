@@ -1,0 +1,8 @@
+{
+  "loader": "forge:obj",
+  "model": "vastseatrain:models/block/rail/rail.obj",
+  "flip_v": true,
+  "automatic_culling": false,
+  "shade_quads": true,
+  "emissive_ambient": false
+}

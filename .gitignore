@@ -1,6 +1,9 @@
 .gradle/
 build/
 run/
+run-data/
 out/
 *.iml
 .idea/
+# Third-party reference sources cloned locally for study only, never committed
+reference/
