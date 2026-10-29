@@ -3,10 +3,8 @@
 
   "item.vastseatrain.track_blueprint": "轨道蓝图",
   "item.vastseatrain.rail": "轨道",
-  "item.vastseatrain.rail_slab": "轨道道床",
 
   "block.vastseatrain.rail": "轨道",
-  "block.vastseatrain.rail_slab": "轨道道床",
 
   "screen.vastseatrain.blueprint": "轨道蓝图",
   "gui.vastseatrain.section.track": "轨道参数",

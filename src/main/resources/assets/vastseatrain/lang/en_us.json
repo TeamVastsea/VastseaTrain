@@ -3,10 +3,8 @@
 
   "item.vastseatrain.track_blueprint": "Track Blueprint",
   "item.vastseatrain.rail": "Rail Segment",
-  "item.vastseatrain.rail_slab": "Rail Bed",
 
   "block.vastseatrain.rail": "Rail Segment",
-  "block.vastseatrain.rail_slab": "Rail Bed",
 
   "screen.vastseatrain.blueprint": "Track Blueprint",
   "gui.vastseatrain.section.track": "Track",

@@ -73,7 +73,9 @@ public class TrackBlueprintItem extends Item {
         }
 
         BlockPos origin = context.getClickedPos().above();
-        Direction dir = context.getHorizontalDirection().getOpposite();
+        // 向前铺：从点击位置沿玩家视线的水平方向延伸，而不是反向（背对玩家）
+        Direction dir = context.getHorizontalDirection();
+
         BlueprintSettings settings = BlueprintSettings.from(stack);
 
         if (level.isClientSide) {

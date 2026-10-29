@@ -18,9 +18,6 @@ public final class VTItems {
     public static final RegistryObject<Item> RAIL = ITEMS.register("rail",
             () -> new BlockItem(VTBlocks.RAIL.get(), new Item.Properties()));
 
-    public static final RegistryObject<Item> RAIL_SLAB = ITEMS.register("rail_slab",
-            () -> new BlockItem(VTBlocks.RAIL_SLAB.get(), new Item.Properties()));
-
     private VTItems() {
     }
 }

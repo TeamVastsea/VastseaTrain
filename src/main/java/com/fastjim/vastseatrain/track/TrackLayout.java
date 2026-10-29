@@ -6,38 +6,32 @@ import net.minecraft.core.Direction;
 /**
  * 轨道占位规则，严格按项目约定：
  * <ul>
- *     <li>一段轨道 = 沿前进方向 1 格、横向 3 格；</li>
- *     <li>横向 3 格由“中心格 + 左右各 1 格”组成：中心格渲染完整模型，左右格各渲染翻转后的同一份模型；
- *     模型为了观感会略微越出这 3 格，但占位、碰撞和铺设都只按 1 × 3 格计算。</li>
- *     <li>模型的轨距为 1 格、段长 1 格，因此相邻段直接首尾相接，不需要搭接。</li>
+ *     <li>一次铺设 = 沿前进方向逐格排列的若干个“段”，每段就是 1 个方块、1 格长；</li>
+ *     <li>每个方块只渲染一份完整模型，模型自身横跨 3 格宽，<b>不再并排铺 3 条轨道</b>；</li>
+ *     <li>碰撞箱按 3 格宽计算（见 {@code RailBlock#getCollisionShape}），模型越界部分允许重叠。</li>
  * </ul>
  */
 public final class TrackLayout {
     /** 一段轨道沿前进方向占用的方块数。 */
     public static final int BLOCK_SPAN = 1;
-    /** 轨道总宽度（含两侧道床格）。 */
+    /** 轨道总宽度（格），用于碰撞箱与摘要显示。 */
     public static final int WIDTH_BLOCKS = 3;
 
     private TrackLayout() {
     }
 
     /**
-     * 逐格计算轨道占用的方块。返回数组行数等于段数，每行 3 列：
-     * 左侧道床格、中心轨道格、右侧道床格。
+     * 逐段计算轨道占用的方块：沿 {@code dir} 从 {@code origin} 起连续 {@code length} 格。
      *
-     * @param origin 轨道起点方块
+     * @param origin 轨道起点方块（第一段所在格）
      * @param dir    轨道前进方向
      * @param length 段数
      */
-    public static BlockPos[][] footprint(BlockPos origin, Direction dir, int length) {
-        Direction side = dir.getClockWise();
-        BlockPos[][] rows = new BlockPos[length * BLOCK_SPAN][WIDTH_BLOCKS];
-        for (int step = 0; step < rows.length; step++) {
-            BlockPos center = origin.relative(dir, step);
-            rows[step][0] = center.relative(side.getOpposite());
-            rows[step][1] = center;
-            rows[step][2] = center.relative(side);
+    public static BlockPos[] footprint(BlockPos origin, Direction dir, int length) {
+        BlockPos[] positions = new BlockPos[length * BLOCK_SPAN];
+        for (int step = 0; step < positions.length; step++) {
+            positions[step] = origin.relative(dir, step);
         }
-        return rows;
+        return positions;
     }
 }

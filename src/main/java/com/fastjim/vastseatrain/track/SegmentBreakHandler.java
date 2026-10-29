@@ -27,7 +27,7 @@ public final class SegmentBreakHandler {
             return;
         }
         BlockState state = event.getState();
-        boolean isRail = state.is(VTBlocks.RAIL.get()) || state.is(VTBlocks.RAIL_SLAB.get());
+        boolean isRail = state.is(VTBlocks.RAIL.get());
         if (!isRail) {
             return;
         }

@@ -1,13 +1,11 @@
 {
-  "loader": "vastseatrain:tiled_obj",
+  "loader": "vastseatrain:rail_obj",
   "model": "vastseatrain:models/block/rail/test.obj",
   "mtl_override": "vastseatrain:models/block/rail_mtl.mtl",
   "flip_v": false,
-  "automatic_culling": false,
   "shade_quads": true,
-  "emissive_ambient": false,
   "transform": {
-    "translation": [-0.5, 0.5, -0.5]
+    "translation": [0.5, 0.5, 0.5]
   },
   "textures": {
     "particle": "vastseatrain:block/rail/gravel",
