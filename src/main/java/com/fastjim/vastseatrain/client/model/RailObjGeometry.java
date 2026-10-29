@@ -1,5 +1,6 @@
 package com.fastjim.vastseatrain.client.model;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -62,7 +63,7 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
     /** 裁剪三角形时允许的浮点误差。 */
     private static final float EPSILON = 1.0E-5F;
 
-    private final List<Mesh> meshes = new ArrayList<>();
+    private final Map<String, Mesh> meshes = new java.util.LinkedHashMap<>();
     private final Vector3f translation;
     private final boolean flipV;
     private final boolean shadeQuads;
@@ -98,13 +99,17 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
     public static RailObjGeometry parse(JsonDeserializationContext context, JsonObject json,
                                         ResourceLocation modelLocation, ResourceLocation mtlLocation,
                                         boolean flipV, boolean shadeQuads) {
-        JsonObject transform = json.has("transform")
-                ? GsonHelper.getAsJsonObject(json, "transform") : new JsonObject();
         Vector3f translation = new Vector3f(0.0F, 0.0F, 0.0F);
-        if (transform.has("translation")) {
-            Vector3f decoded = context.deserialize(transform.get("translation"), Vector3f.class);
-            if (decoded != null) {
-                translation = decoded;
+        if (json.has("transform") && json.get("transform").isJsonObject()) {
+            JsonObject transform = json.getAsJsonObject("transform");
+            if (transform.has("translation") && transform.get("translation").isJsonArray()) {
+                JsonArray array = transform.getAsJsonArray("translation");
+                if (array.size() >= 3) {
+                    translation = new Vector3f(
+                            array.get(0).getAsFloat(),
+                            array.get(1).getAsFloat(),
+                            array.get(2).getAsFloat());
+                }
             }
         }
 
@@ -177,9 +182,12 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
                     case "usemtl" -> {
                         currentMaterial = trimmed.substring("usemtl".length()).trim();
                         String texture = materialTextures.get(currentMaterial);
-                        currentMesh = texture == null ? null : new Mesh(texture);
-                        if (currentMesh != null) {
-                            meshes.add(currentMesh);
+                        if (texture == null) {
+                            currentMesh = null;
+                        } else {
+                            // 同名材质在 OBJ 里会多次出现（美术按对象分段导出），这里复用同一个 Mesh，
+                            // 避免拆成多个材质段导致贴图/剔除设置被重复处理
+                            currentMesh = meshes.computeIfAbsent(currentMaterial, key -> new Mesh(texture));
                         }
                     }
                     case "f" -> {
@@ -202,7 +210,7 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         if (count < 3) {
             return;
         }
-        // 统一按三角形扇形拆分，美术文件里是三角形，这里兼容多边形
+        // OBJ 面通常是三角形或四边形；更多顶点按扇形拆分
         for (int i = 1; i + 1 < count; i++) {
             Vector3f p0 = vertexPosition(parts[1], positions);
             Vector3f p1 = vertexPosition(parts[i + 1], positions);
@@ -271,15 +279,16 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
 
         int emitted = 0;
         RandomSource random = RandomSource.create();
-        for (Mesh mesh : meshes) {
+        for (Mesh mesh : meshes.values()) {
             TextureAtlasSprite sprite = spriteGetter.apply(context.getMaterial(mesh.texture));
             for (Triangle triangle : mesh.triangles) {
                 List<float[]> pieces = tileUv(triangle);
                 for (float[] piece : pieces) {
-                    BakedQuad quad = buildQuad(piece, triangle, sprite, rotation, rotate);
-                    if (quad != null) {
-                        builder.addUnculledFace(quad);
-                        emitted++;
+                    for (BakedQuad quad : buildQuads(piece, triangle, sprite, rotation, rotate)) {
+                        if (quad != null) {
+                            builder.addUnculledFace(quad);
+                            emitted++;
+                        }
                     }
                 }
             }
@@ -289,10 +298,13 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
     }
 
     /**
-     * 把一个三角面按 UV 整数格切块，每块返回 15 个 float：三个顶点的 位置(3) + UV(2)。
+     * 把一个三角面按 UV 整数格切块，每块返回若干个顶点：位置(3) + UV(2)。
      * <p>
      * 三角面从模型坐标到 UV 的映射是仿射的，所以“在 UV 空间裁剪三角形”等价于“在模型上切分”，
      * 切块后形状与原来完全一致，只是每块的 UV 都归一化到 {@code 0..1}。
+     * <p>
+     * 切分边界必须落在<b>贴图整数边界</b>上（也就是贴图重复的接缝处），否则相邻块各采到半张图、
+     * 接缝处出现错位，视觉上就是锯齿状破面。因此网格按 {@code ceil} 取整后再均分。
      */
     private List<float[]> tileUv(Triangle triangle) {
         float[] u = triangle.u();
@@ -302,49 +314,53 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         float minV = Math.min(v[0], Math.min(v[1], v[2]));
         float maxV = Math.max(v[0], Math.max(v[1], v[2]));
 
-        int tilesU = clampTiles(Math.round(maxU - minU));
-        int tilesV = clampTiles(Math.round(maxV - minV));
-
-        float minX = Math.min(triangle.position()[0].x(), Math.min(triangle.position()[1].x(), triangle.position()[2].x()));
-        float maxX = Math.max(triangle.position()[0].x(), Math.max(triangle.position()[1].x(), triangle.position()[2].x()));
-        float minY = Math.min(triangle.position()[0].y(), Math.min(triangle.position()[1].y(), triangle.position()[2].y()));
-        float maxY = Math.max(triangle.position()[0].y(), Math.max(triangle.position()[1].y(), triangle.position()[2].y()));
-        float minZ = Math.min(triangle.position()[0].z(), Math.min(triangle.position()[1].z(), triangle.position()[2].z()));
-        float maxZ = Math.max(triangle.position()[0].z(), Math.max(triangle.position()[1].z(), triangle.position()[2].z()));
+        // 网格必须对齐到贴图整数边界：贴图重复的接缝在 u=整数、v=整数 处，
+        // 只有切在这条线上，相邻块才各采一整张贴图、不会错位。
+        int startU = (int) Math.floor(minU);
+        int startV = (int) Math.floor(minV);
+        int endU = (int) Math.ceil(maxU);
+        int endV = (int) Math.ceil(maxV);
+        int tilesU = Math.min(MAX_TILES, endU - startU);
+        int tilesV = Math.min(MAX_TILES, endV - startV);
 
         if (tilesU <= 1 && tilesV <= 1) {
-            // 单格：直接把 UV 归一化，等价于原样使用
+            // 单格：美术 UV 本身就在一张贴图内，原样保留（归一化会改变贴图比例）
             List<float[]> single = new ArrayList<>(1);
-            float[] out = new float[15];
+            float[] flat = new float[15];
             for (int i = 0; i < 3; i++) {
-                out[i * 5] = triangle.position()[i].x();
-                out[i * 5 + 1] = triangle.position()[i].y();
-                out[i * 5 + 2] = triangle.position()[i].z();
-                out[i * 5 + 3] = (u[i] - minU) / Math.max(maxU - minU, EPSILON);
-                out[i * 5 + 4] = (v[i] - minV) / Math.max(maxV - minV, EPSILON);
+                flat[i * 5] = triangle.position()[i].x();
+                flat[i * 5 + 1] = triangle.position()[i].y();
+                flat[i * 5 + 2] = triangle.position()[i].z();
+                flat[i * 5 + 3] = u[i] - startU;
+                flat[i * 5 + 4] = v[i] - startV;
             }
-            single.add(out);
+            single.add(flat);
             return single;
         }
 
         List<float[]> result = new ArrayList<>(tilesU * tilesV);
-        float cellU = (maxU - minU) / tilesU;
-        float cellV = (maxV - minV) / tilesV;
         // 顶点在 UV 空间里的多边形
         List<float[]> polygon = new ArrayList<>(3);
         polygon.add(new float[]{u[0], v[0]});
         polygon.add(new float[]{u[1], v[1]});
         polygon.add(new float[]{u[2], v[2]});
+        float polygonArea = uvArea(polygon);
 
         for (int iu = 0; iu < tilesU; iu++) {
             for (int iv = 0; iv < tilesV; iv++) {
-                float u0 = minU + iu * cellU;
-                float v0 = minV + iv * cellV;
-                float u1 = u0 + cellU;
-                float v1 = v0 + cellV;
+                float u0 = startU + iu;
+                float v0 = startV + iv;
+                float u1 = u0 + 1.0F;
+                float v1 = v0 + 1.0F;
                 List<float[]> clipped = clip(polygon, u0, v0, u1, v1);
                 if (clipped.size() < 3) {
                     continue;
+                }
+                // Sutherland–Hodgman 可能改变顶点绕序，这里强制与原始三角形在 3D 空间中的绕序一致。
+                // 注意必须用 3D 判断：UV 空间的绕序与 3D 绕序可以是相反的（UV 被镜像时），
+                // 若按 UV 判断并翻转，块的绕序会与法线相反，被背面剔除后表现为破面。
+                if (isReversed(clipped, triangle)) {
+                    java.util.Collections.reverse(clipped);
                 }
                 float[] flat = new float[clipped.size() * 5];
                 for (int i = 0; i < clipped.size(); i++) {
@@ -353,26 +369,64 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
                     flat[i * 5] = pos[0];
                     flat[i * 5 + 1] = pos[1];
                     flat[i * 5 + 2] = pos[2];
-                    flat[i * 5 + 3] = clamp01((uv[0] - u0) / Math.max(cellU, EPSILON));
-                    flat[i * 5 + 4] = clamp01((uv[1] - v0) / Math.max(cellV, EPSILON));
+                    flat[i * 5 + 3] = clamp01(uv[0] - u0);
+                    flat[i * 5 + 4] = clamp01(uv[1] - v0);
                 }
                 result.add(flat);
             }
         }
         if (result.isEmpty()) {
-            // 极端情况下（UV 退化）退回单格
+            // 极端情况下（UV 退化）整面作为一个块
             List<float[]> single = new ArrayList<>(1);
-            single.add(new float[]{
-                    triangle.position()[0].x(), triangle.position()[0].y(), triangle.position()[0].z(), 0.0F, 0.0F,
-                    triangle.position()[1].x(), triangle.position()[1].y(), triangle.position()[1].z(), 1.0F, 0.0F,
-                    triangle.position()[2].x(), triangle.position()[2].y(), triangle.position()[2].z(), 1.0F, 1.0F});
+            float[] flat = new float[15];
+            float spanU = Math.max(maxU - minU, EPSILON);
+            float spanV = Math.max(maxV - minV, EPSILON);
+            for (int i = 0; i < 3; i++) {
+                flat[i * 5] = triangle.position()[i].x();
+                flat[i * 5 + 1] = triangle.position()[i].y();
+                flat[i * 5 + 2] = triangle.position()[i].z();
+                flat[i * 5 + 3] = clamp01((u[i] - minU) / spanU);
+                flat[i * 5 + 4] = clamp01((v[i] - minV) / spanV);
+            }
+            single.add(flat);
             return single;
         }
         return result;
     }
 
-    private static int clampTiles(long tiles) {
-        return (int) Math.max(1L, Math.min(MAX_TILES, tiles));
+    /** 多边形在 UV 平面的有向面积；正负号代表绕序。 */
+    private static float uvArea(List<float[]> polygon) {
+        float sum = 0.0F;
+        int size = polygon.size();
+        for (int i = 0; i < size; i++) {
+            float[] a = polygon.get(i);
+            float[] b = polygon.get((i + 1) % size);
+            sum += a[0] * b[1] - b[0] * a[1];
+        }
+        return sum * 0.5F;
+    }
+
+    /**
+     * 判断 UV 空间多边形反解到 3D 后，绕序是否与源三角形相反。
+     * <p>
+     * 必须用 3D 法线比较，不能看 UV 有向面积：UV 被镜像时，UV 空间的“逆时针”在模型上其实是顺时针。
+     */
+    private static boolean isReversed(List<float[]> clipped, Triangle triangle) {
+        if (clipped.size() < 3) {
+            return false;
+        }
+        float[] a = positionAt(triangle, clipped.get(0)[0], clipped.get(0)[1]);
+        float[] b = positionAt(triangle, clipped.get(1)[0], clipped.get(1)[1]);
+        float[] c = positionAt(triangle, clipped.get(2)[0], clipped.get(2)[1]);
+        double[] e1 = {b[0] - a[0], b[1] - a[1], b[2] - a[2]};
+        double[] e2 = {c[0] - a[0], c[1] - a[1], c[2] - a[2]};
+        double[] normal = {
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0]};
+        Vector3f source = faceNormal(triangle);
+        double dot = normal[0] * source.x() + normal[1] * source.y() + normal[2] * source.z();
+        return dot < 0.0D;
     }
 
     private static float clamp01(float value) {
@@ -418,16 +472,26 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         float[] uu = triangle.u();
         float[] vv = triangle.v();
         float denom = (vv[1] - vv[2]) * (uu[0] - uu[2]) + (uu[2] - uu[1]) * (vv[0] - vv[2]);
+        Vector3f p0 = triangle.position()[0];
+        Vector3f p1 = triangle.position()[1];
+        Vector3f p2 = triangle.position()[2];
         if (Math.abs(denom) < EPSILON) {
+            // UV 退化（例如整块 UV 只用一个 v 值）：沿 UV 包围盒的长轴在三个顶点间插值，
+            // 避免切块全部塌到同一个点上（那会表现为破面）
+            float spanU = Math.max(uu[0], Math.max(uu[1], uu[2])) - Math.min(uu[0], Math.min(uu[1], uu[2]));
+            float spanV = Math.max(vv[0], Math.max(vv[1], vv[2])) - Math.min(vv[0], Math.min(vv[1], vv[2]));
+            float t = spanU >= spanV
+                    ? (u - Math.min(uu[0], Math.min(uu[1], uu[2]))) / Math.max(spanU, EPSILON)
+                    : (v - Math.min(vv[0], Math.min(vv[1], vv[2]))) / Math.max(spanV, EPSILON);
+            t = clamp01(t);
             return new float[]{
-                    triangle.position()[0].x(), triangle.position()[0].y(), triangle.position()[0].z()};
+                    p0.x() + (p1.x() - p0.x()) * t + (p2.x() - p0.x()) * t * 0.0F,
+                    p0.y() + (p1.y() - p0.y()) * t + (p2.y() - p0.y()) * t * 0.0F,
+                    p0.z() + (p1.z() - p0.z()) * t + (p2.z() - p0.z()) * t * 0.0F};
         }
         float a = ((vv[1] - vv[2]) * (u - uu[2]) + (uu[2] - uu[1]) * (v - vv[2])) / denom;
         float b = ((vv[2] - vv[0]) * (u - uu[2]) + (uu[0] - uu[2]) * (v - vv[2])) / denom;
         float c = 1.0F - a - b;
-        Vector3f p0 = triangle.position()[0];
-        Vector3f p1 = triangle.position()[1];
-        Vector3f p2 = triangle.position()[2];
         return new float[]{
                 p0.x() * a + p1.x() * b + p2.x() * c,
                 p0.y() * a + p1.y() * b + p2.y() * c,
@@ -435,48 +499,78 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
     }
 
     /**
-     * 把切好的多边形（扇形三角化后逐个）转成 {@link BakedQuad}。
+     * 把切好的多边形（扇形三角化后逐个）转成 {@link BakedQuad} 列表，一个多边形可能产生多个四边形。
      * 位置先按朝向旋转，再叠加 {@code translation}，最后写入顶点缓冲。
      */
     @Nullable
-    private BakedQuad buildQuad(float[] flat, Triangle source, TextureAtlasSprite sprite,
-                                Transformation rotation, boolean rotate) {
+    private List<BakedQuad> buildQuads(float[] flat, Triangle source, TextureAtlasSprite sprite,
+                                       Transformation rotation, boolean rotate) {
         int count = flat.length / 5;
         if (count < 3) {
-            return null;
+            return List.of();
         }
         Vector3f normal = faceNormal(source);
         Direction direction = Direction.getNearest(normal.x(), normal.y(), normal.z());
-
-        for (int i = 1; i + 1 < count; i++) {
-            QuadBakingVertexConsumer.Buffered buffer = new QuadBakingVertexConsumer.Buffered();
-            buffer.setSprite(sprite);
-            buffer.setTintIndex(-1);
-            buffer.setShade(shadeQuads);
-            buffer.setDirection(direction);
-            int[] order = {0, i, i + 1, i + 1};
-            for (int corner : order) {
-                Vector3f position = new Vector3f(flat[corner * 5], flat[corner * 5 + 1], flat[corner * 5 + 2]);
-                if (rotate) {
-                    Vector4f transformed = new Vector4f(position, 1.0F);
-                    rotation.transformPosition(transformed);
-                    position.set(transformed.x(), transformed.y(), transformed.z());
-                }
-                position.add(translation);
-                Vector3f n = new Vector3f(normal);
-                if (rotate) {
-                    rotation.transformNormal(n);
-                }
-                buffer.vertex(position.x(), position.y(), position.z());
-                buffer.color(1.0F, 1.0F, 1.0F, 1.0F);
-                buffer.uv(sprite.getU(flat[corner * 5 + 3] * 16.0F), sprite.getV(flat[corner * 5 + 4] * 16.0F));
-                buffer.uv2(0);
-                buffer.normal(n.x(), n.y(), n.z());
-                buffer.endVertex();
-            }
-            return buffer.getQuad();
+        Vector3f rotatedNormal = new Vector3f(normal);
+        if (rotate) {
+            rotation.transformNormal(rotatedNormal);
         }
-        return null;
+
+        List<BakedQuad> quads = new ArrayList<>(Math.max(1, count - 2));
+        if (count == 4) {
+            // 四边形：直接用 4 个顶点组成一个 quad，不扇形拆分（拆分会重复顶点、产生退化三角形）
+            BakedQuad quad = makeQuad(flat, new int[]{0, 1, 2, 3}, sprite, direction, rotatedNormal, rotation, rotate);
+            if (quad != null) {
+                quads.add(quad);
+            }
+        } else {
+            // 三角形或更多顶点：扇形三角化，每个三角形补齐成 quad
+            for (int i = 1; i + 1 < count; i++) {
+                BakedQuad quad = makeQuad(flat, new int[]{0, i, i + 1, i + 1}, sprite, direction,
+                        rotatedNormal, rotation, rotate);
+                if (quad != null) {
+                    quads.add(quad);
+                }
+            }
+        }
+        return quads;
+    }
+
+    /** 按给定顶点顺序生成一个 {@link BakedQuad}；第四位与前一位重复即将三角形补齐为 quad。 */
+    @Nullable
+    private BakedQuad makeQuad(float[] flat, int[] corners, TextureAtlasSprite sprite,
+                               Direction direction, Vector3f rotatedNormal,
+                               Transformation rotation, boolean rotate) {
+        // 面积近似为零的退化面直接丢弃：画出来只会闪烁或产生破面
+        Vector3f a = new Vector3f(flat[corners[0] * 5], flat[corners[0] * 5 + 1], flat[corners[0] * 5 + 2]);
+        Vector3f b = new Vector3f(flat[corners[1] * 5], flat[corners[1] * 5 + 1], flat[corners[1] * 5 + 2]);
+        Vector3f c = new Vector3f(flat[corners[2] * 5], flat[corners[2] * 5 + 1], flat[corners[2] * 5 + 2]);
+        Vector3f cross = b.sub(a).cross(c.sub(a));
+        if (cross.lengthSquared() < 1.0E-12F) {
+            return null;
+        }
+
+        QuadBakingVertexConsumer.Buffered buffer = new QuadBakingVertexConsumer.Buffered();
+        buffer.setSprite(sprite);
+        buffer.setTintIndex(-1);
+        buffer.setShade(shadeQuads);
+        buffer.setDirection(direction);
+        for (int corner : corners) {
+            Vector3f position = new Vector3f(flat[corner * 5], flat[corner * 5 + 1], flat[corner * 5 + 2]);
+            if (rotate) {
+                Vector4f transformed = new Vector4f(position, 1.0F);
+                rotation.transformPosition(transformed);
+                position.set(transformed.x(), transformed.y(), transformed.z());
+            }
+            position.add(translation);
+            buffer.vertex(position.x(), position.y(), position.z());
+            buffer.color(1.0F, 1.0F, 1.0F, 1.0F);
+            buffer.uv(sprite.getU(flat[corner * 5 + 3] * 16.0F), sprite.getV(flat[corner * 5 + 4] * 16.0F));
+            buffer.uv2(0);
+            buffer.normal(rotatedNormal.x(), rotatedNormal.y(), rotatedNormal.z());
+            buffer.endVertex();
+        }
+        return buffer.getQuad();
     }
 
     private static Vector3f faceNormal(Triangle triangle) {

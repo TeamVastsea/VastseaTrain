@@ -119,16 +119,66 @@ public class TrackBlueprintScreen extends Screen {
         return Math.max(0.5F, Math.min(1.0F, Math.min(fitWidth, fitHeight)));
     }
 
+    /**
+     * 设计坐标 → 屏幕 X。
+     * <p>
+     * 注意：控件本身必须放在<b>设计坐标系</b>里创建（见 {@link #init()}），
+     * 由 {@link #render} 的 pose 统一缩放；点击则由 {@link #mouseClicked} 等把屏幕坐标反算回设计坐标。
+     * 两者都只做一次缩放，才不会出现“看起来在这里、点起来在那里”。
+     */
     private int sx(int designX) {
-        return Math.round(originX + designX * scale);
+        return designX;
     }
 
     private int sy(int designY) {
-        return Math.round(originY + designY * scale);
+        return designY;
     }
 
     private int si(int designSize) {
-        return Math.max(1, Math.round(designSize * scale));
+        return designSize;
+    }
+
+    /** 屏幕 X → 设计 X。 */
+    private int designX(double screenX) {
+        return Math.round((float) ((screenX - originX) / scale));
+    }
+
+    /** 屏幕 Y → 设计 Y。 */
+    private int designY(double screenY) {
+        return Math.round((float) ((screenY - originY) / scale));
+    }
+
+    private void pushDesignPose(GuiGraphics graphics) {
+        PoseStack pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(originX, originY, 0.0F);
+        pose.scale(scale, scale, 1.0F);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return super.mouseClicked(designX(mouseX), designY(mouseY), button);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        return super.mouseReleased(designX(mouseX), designY(mouseY), button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        return super.mouseDragged(designX(mouseX), designY(mouseY), button,
+                dragX / scale, dragY / scale);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        return super.mouseScrolled(designX(mouseX), designY(mouseY), delta);
+    }
+
+    @Override
+    public void mouseMoved(double mouseX, double mouseY) {
+        super.mouseMoved(designX(mouseX), designY(mouseY));
     }
 
     private Component gaugeLabel() {
@@ -156,10 +206,7 @@ public class TrackBlueprintScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
 
-        PoseStack pose = graphics.pose();
-        pose.pushPose();
-        pose.translate(originX, originY, 0.0F);
-        pose.scale(scale, scale, 1.0F);
+        pushDesignPose(graphics);
 
         int panelLeft = PADDING;
         int top = 26;
@@ -178,20 +225,19 @@ public class TrackBlueprintScreen extends Screen {
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.bed"), middleX + PADDING, top + PADDING, 0xFFD27F);
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.summary"), rightX + PADDING, top + PADDING, 0xFFD27F);
 
-        int sx = rightX + PADDING;
-        int sy = top + 24;
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.length", settings.length()), sx, sy, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.blocks", settings.totalBlocks()), sx, sy + 12, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.width", TrackLayout.WIDTH_BLOCKS), sx, sy + 24, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.gauge", settings.gauge().getDisplayName()), sx, sy + 36, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.bed", settings.bed().getDisplayName()), sx, sy + 48, 0xFFFFFF);
+        int summaryX = rightX + PADDING;
+        int summaryY = top + 24;
+        graphics.drawString(font, Component.translatable("summary.vastseatrain.length", settings.length()), summaryX, summaryY, 0xFFFFFF);
+        graphics.drawString(font, Component.translatable("summary.vastseatrain.blocks", settings.totalBlocks()), summaryX, summaryY + 12, 0xFFFFFF);
+        graphics.drawString(font, Component.translatable("summary.vastseatrain.width", TrackLayout.WIDTH_BLOCKS), summaryX, summaryY + 24, 0xFFFFFF);
+        graphics.drawString(font, Component.translatable("summary.vastseatrain.gauge", settings.gauge().getDisplayName()), summaryX, summaryY + 36, 0xFFFFFF);
+        graphics.drawString(font, Component.translatable("summary.vastseatrain.bed", settings.bed().getDisplayName()), summaryX, summaryY + 48, 0xFFFFFF);
 
-        // 控件已按屏幕坐标定位；设到设计坐标系下，由上面的 pose 缩放回屏幕
-        pose.scale(1.0F / scale, 1.0F / scale, 1.0F);
+        // 控件坐标为设计坐标，与文字同一套 pose，确保“画在哪就在哪点得中”
         for (Renderable renderable : this.renderables) {
-            renderable.render(graphics, mouseX, mouseY, partialTick);
+            renderable.render(graphics, designX(mouseX), designY(mouseY), partialTick);
         }
-        pose.popPose();
+        graphics.pose().popPose();
     }
 
     private static void drawPanel(GuiGraphics graphics, int x, int top, int bottom) {

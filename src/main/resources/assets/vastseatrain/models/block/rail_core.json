@@ -3,7 +3,7 @@
   "model": "vastseatrain:models/block/rail/test.obj",
   "mtl_override": "vastseatrain:models/block/rail_mtl.mtl",
   "flip_v": false,
-  "shade_quads": true,
+  "shade_quads": false,
   "transform": {
     "translation": [0.5, 0.5, 0.5]
   },
