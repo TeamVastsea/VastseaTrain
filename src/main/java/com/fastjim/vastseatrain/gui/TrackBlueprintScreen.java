@@ -4,6 +4,7 @@ import com.fastjim.vastseatrain.VTConfig;
 import com.fastjim.vastseatrain.network.NetworkHandler;
 import com.fastjim.vastseatrain.network.SaveBlueprintMessage;
 import com.fastjim.vastseatrain.track.BlueprintSettings;
+import com.fastjim.vastseatrain.track.RailStyle;
 import com.fastjim.vastseatrain.track.TrackLayout;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -41,6 +42,7 @@ public class TrackBlueprintScreen extends Screen {
     private Button modeButton;
     private Button turnButton;
     private Button gaugeButton;
+    private Button styleButton;
 
     /** 当前缩放倍数（像素 / 设计单位），在 {@link #init()} 中按窗口尺寸计算。 */
     private float scale = 1.0F;
@@ -132,6 +134,13 @@ public class TrackBlueprintScreen extends Screen {
             settings = settings.withPreview(!settings.preview());
             b.setMessage(previewLabel());
         }).bounds(sx(middleX), sy(top + 62), si(innerWidth), si(20)).build());
+
+        // 中栏：轨道模型（打开二级界面：左侧列表 + 右侧 3D 预览）
+        styleButton = addRenderableWidget(Button.builder(styleLabel(), b -> {
+            if (minecraft != null) {
+                minecraft.setScreen(new TrackStyleScreen(this, settings.style()));
+            }
+        }).bounds(sx(middleX), sy(top + 104), si(innerWidth), si(20)).build());
 
         addRenderableWidget(Button.builder(Component.translatable("gui.vastseatrain.apply"), b -> applyAndClose())
                 .bounds(sx(rightX), sy(top + 112), si(innerWidth), si(20)).build());
@@ -259,6 +268,18 @@ public class TrackBlueprintScreen extends Screen {
                 Component.translatable(settings.preview() ? "gui.vastseatrain.on" : "gui.vastseatrain.off"));
     }
 
+    private Component styleLabel() {
+        return Component.translatable("gui.vastseatrain.style", settings.style().getDisplayName());
+    }
+
+    /** 由“轨道模型”二级界面回调：选中的外观立即生效（只影响之后新铺设的轨道）。 */
+    public void applyStyle(RailStyle style) {
+        settings = settings.withStyle(style);
+        if (styleButton != null) {
+            styleButton.setMessage(styleLabel());
+        }
+    }
+
     private void applyAndClose() {
         settings.write(blueprint);
         if (minecraft != null && minecraft.getConnection() != null) {
@@ -293,6 +314,7 @@ public class TrackBlueprintScreen extends Screen {
             graphics.drawString(font, Component.translatable("gui.vastseatrain.length"), leftX, top + 52, 0xA0A0A0);
         }
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.bed"), middleX + PADDING, top + PADDING, 0xFFD27F);
+        graphics.drawString(font, Component.translatable("gui.vastseatrain.style.title"), middleX + PADDING, top + 94, 0xA0A0A0);
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.summary"), rightX + PADDING, top + PADDING, 0xFFD27F);
 
         int summaryX = rightX + PADDING;
@@ -311,6 +333,7 @@ public class TrackBlueprintScreen extends Screen {
             graphics.drawString(font, Component.translatable("summary.vastseatrain.width", TrackLayout.WIDTH_BLOCKS), summaryX, summaryY + 24, 0xFFFFFF);
             graphics.drawString(font, Component.translatable("summary.vastseatrain.gauge", settings.gauge().getDisplayName()), summaryX, summaryY + 36, 0xFFFFFF);
             graphics.drawString(font, Component.translatable("summary.vastseatrain.bed", settings.bed().getDisplayName()), summaryX, summaryY + 48, 0xFFFFFF);
+            graphics.drawString(font, styleLabel(), summaryX, summaryY + 60, 0xFFFFFF);
         }
 
         // 半径过大时给出性能提示：条带数 = 每格一条模型，数量直接影响铺设耗时与渲染负担

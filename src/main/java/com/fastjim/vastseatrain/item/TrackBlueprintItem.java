@@ -94,7 +94,8 @@ public class TrackBlueprintItem extends Item {
                             Component.translatable(settings.curveLeft()
                                     ? "message.vastseatrain.curve_left" : "message.vastseatrain.curve_right"),
                             settings.totalBlocks())
-                    : Component.translatable("message.vastseatrain.placed", settings.length());
+                    : Component.translatable("message.vastseatrain.placed", settings.length(),
+                            settings.style().getDisplayName());
             serverPlayer.displayClientMessage(success.copy().withStyle(ChatFormatting.GREEN), true);
         }
         return InteractionResult.SUCCESS;
@@ -115,6 +116,7 @@ public class TrackBlueprintItem extends Item {
         }
         tooltip.add(Component.translatable("tooltip.vastseatrain.gauge", settings.gauge().getDisplayName()).withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.vastseatrain.bed", settings.bed().getDisplayName()).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.vastseatrain.style", settings.style().getDisplayName()).withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.vastseatrain.usage").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

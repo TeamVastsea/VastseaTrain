@@ -12,6 +12,9 @@ import net.minecraftforge.client.model.geometry.IGeometryLoader;
  * 与直道 {@link RailObjLoader} 读同一份美术 OBJ、同一套贴图映射，差别在于烘焙结果：
  * 直道烘焙成一份固定摆放的 {@link net.minecraft.client.resources.model.BakedModel}，
  * 弯道则把整理好的面数据交给 {@link RailCurveBakedModel}，在区块烘焙时按方块实体的角度现算顶点。
+ * <p>
+ * 弯道方块所有外观共用，所以这里把其它外观的弯道模型 JSON 一并读进来（见
+ * {@link RailCurveGeometry#readAllStyleJson()}），烘焙时每种外观各准备一份面数据。
  */
 public class RailCurveObjLoader implements IGeometryLoader<RailCurveGeometry> {
     @Override
@@ -28,6 +31,6 @@ public class RailCurveObjLoader implements IGeometryLoader<RailCurveGeometry> {
                 ResourceLocation.parse(mtlOverride),
                 flipV,
                 shadeQuads);
-        return new RailCurveGeometry(geometry);
+        return new RailCurveGeometry(geometry).withStyles(RailCurveGeometry.readAllStyleJson());
     }
 }

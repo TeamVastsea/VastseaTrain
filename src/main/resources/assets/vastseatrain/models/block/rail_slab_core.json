@@ -1,0 +1,23 @@
+{
+  "loader": "vastseatrain:rail_obj",
+  "model": "vastseatrain:models/block/rail/test2.obj",
+  "mtl_override": "vastseatrain:models/block/rail_slab_mtl.mtl",
+  "flip_v": false,
+  "shade_quads": true,
+  "ambientocclusion": false,
+  "transform": {
+    "translation": [0.5, 0.5, 0.5]
+  },
+  "textures": {
+    "particle": "vastseatrain:block/rail/medium2",
+    "black": "vastseatrain:block/rail/black",
+    "brown": "vastseatrain:block/rail/brown",
+    "gray1": "vastseatrain:block/rail/gray1",
+    "gray2": "vastseatrain:block/rail/gray2",
+    "gray3": "vastseatrain:block/rail/gray3",
+    "light_gray": "vastseatrain:block/rail/light_gray",
+    "medium1": "vastseatrain:block/rail/medium1",
+    "medium2": "vastseatrain:block/rail/medium2",
+    "medium3": "vastseatrain:block/rail/medium3"
+  }
+}

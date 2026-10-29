@@ -23,11 +23,13 @@ import java.util.UUID;
  * <p>
  * 每格只放一个轨道方块（模型自身横跨 3 格宽，不再并排铺 3 条轨道）：
  * <ul>
- *     <li>直道：{@code rail} 方块，沿方向逐格前推；</li>
+ *     <li>直道：所选外观对应的直道方块，沿方向逐格前推；</li>
  *     <li>弯道：{@code rail_curve} 方块，位置由 {@link CurvePlan} 沿弧线算出，
- *     每格的旋转角与格内偏移写进方块实体，客户端按此摆放整份模型。</li>
+ *     每格的旋转角、格内偏移与外观写进方块实体，客户端按此摆放整份模型。</li>
  * </ul>
  * 直道与弯道在入口处共用同一个点（入口格中心），所以连续铺设时首尾相接。
+ * <p>
+ * 外观只对<b>本次铺设</b>生效：已经铺好的格子不会被改写。
  */
 public final class TrackPlacer {
     private TrackPlacer() {
@@ -62,11 +64,13 @@ public final class TrackPlacer {
             }
         }
 
-        BlockState rail = VTBlocks.RAIL.get().defaultBlockState().setValue(RailBlock.FACING, dir);
+        Block railBlock = VTBlocks.byName(settings.style().blockName());
+        BlockState rail = railBlock.defaultBlockState().setValue(RailBlock.FACING, dir);
 
         List<BlockPos> placed = new ArrayList<>(positions.length);
         for (BlockPos pos : positions) {
-            if (!level.getBlockState(pos).is(VTBlocks.RAIL.get())) {
+            // 已有轨道格保持原样：外观切换只影响新铺的格子
+            if (!VTBlocks.isTrack(level.getBlockState(pos).getBlock())) {
                 level.setBlock(pos, rail, Block.UPDATE_ALL);
             }
             placed.add(pos);
@@ -108,7 +112,7 @@ public final class TrackPlacer {
             level.setBlock(pos, state, Block.UPDATE_ALL);
             BlockEntity entity = level.getBlockEntity(pos);
             if (entity instanceof RailCurveBlockEntity curve) {
-                curve.setPlacement(entry.getValue(), plan.radius(), plan.left());
+                curve.setPlacement(entry.getValue(), plan.radius(), plan.left(), settings.style());
             }
             placed.add(pos);
         }
@@ -126,7 +130,7 @@ public final class TrackPlacer {
             return Component.translatable("message.vastseatrain.out_of_world", pos.getX(), pos.getZ());
         }
         BlockState existing = level.getBlockState(pos);
-        if (existing.is(VTBlocks.RAIL.get()) || existing.is(VTBlocks.RAIL_CURVE.get())) {
+        if (VTBlocks.isTrack(existing.getBlock())) {
             return null;
         }
         if (!existing.canBeReplaced()) {

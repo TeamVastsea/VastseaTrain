@@ -14,29 +14,30 @@ import net.minecraft.world.item.ItemStack;
  * @param preview     是否显示预览
  * @param curveRadius 90° 弯道半径（格，0 表示铺直道）
  * @param curveLeft   弯道是否左转（否则右转）
+ * @param style       轨道外观（只影响之后新铺设的轨道）
  */
 public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boolean preview,
-                                int curveRadius, boolean curveLeft) {
+                                int curveRadius, boolean curveLeft, RailStyle style) {
     public static final int MIN_LENGTH = 1;
     public static final int MAX_LENGTH = 256;
 
     public static final BlueprintSettings DEFAULT =
-            new BlueprintSettings(8, RailGauge.STANDARD, TrackBed.GRAVEL, false, 0, false);
+            new BlueprintSettings(8, RailGauge.STANDARD, TrackBed.GRAVEL, false, 0, false, RailStyle.STANDARD);
 
     public BlueprintSettings withLength(int value) {
-        return new BlueprintSettings(clampLength(value), gauge, bed, preview, curveRadius, curveLeft);
+        return new BlueprintSettings(clampLength(value), gauge, bed, preview, curveRadius, curveLeft, style);
     }
 
     public BlueprintSettings withGauge(RailGauge value) {
-        return new BlueprintSettings(length, value, bed, preview, curveRadius, curveLeft);
+        return new BlueprintSettings(length, value, bed, preview, curveRadius, curveLeft, style);
     }
 
     public BlueprintSettings withBed(TrackBed value) {
-        return new BlueprintSettings(length, gauge, value, preview, curveRadius, curveLeft);
+        return new BlueprintSettings(length, gauge, value, preview, curveRadius, curveLeft, style);
     }
 
     public BlueprintSettings withPreview(boolean value) {
-        return new BlueprintSettings(length, gauge, bed, value, curveRadius, curveLeft);
+        return new BlueprintSettings(length, gauge, bed, value, curveRadius, curveLeft, style);
     }
 
     /**
@@ -44,11 +45,17 @@ public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boole
      */
     public BlueprintSettings withCurveRadius(int value) {
         int radius = value <= 0 ? 0 : VTConfig.clampRadius(value);
-        return new BlueprintSettings(length, gauge, bed, preview, radius, curveLeft);
+        return new BlueprintSettings(length, gauge, bed, preview, radius, curveLeft, style);
     }
 
     public BlueprintSettings withCurveLeft(boolean value) {
-        return new BlueprintSettings(length, gauge, bed, preview, curveRadius, value);
+        return new BlueprintSettings(length, gauge, bed, preview, curveRadius, value, style);
+    }
+
+    /** 换一套轨道外观（之后新铺设的轨道才使用）。 */
+    public BlueprintSettings withStyle(RailStyle value) {
+        return new BlueprintSettings(length, gauge, bed, preview, curveRadius, curveLeft,
+                value == null ? RailStyle.STANDARD : value);
     }
 
     /** 是否铺 90° 弯道。 */
@@ -77,6 +84,7 @@ public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boole
         tag.putBoolean("preview", preview);
         tag.putInt("curve_radius", curveRadius);
         tag.putBoolean("curve_left", curveLeft);
+        tag.putString("rail_style", style.getSerializedName());
         return tag;
     }
 
@@ -103,6 +111,9 @@ public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boole
         if (tag.contains("curve_left")) {
             settings = settings.withCurveLeft(tag.getBoolean("curve_left"));
         }
+        if (tag.contains("rail_style")) {
+            settings = settings.withStyle(RailStyle.byName(tag.getString("rail_style")));
+        }
         return settings;
     }
 
@@ -125,6 +136,7 @@ public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boole
         buf.writeBoolean(preview);
         buf.writeVarInt(curveRadius);
         buf.writeBoolean(curveLeft);
+        buf.writeEnum(style);
     }
 
     public static BlueprintSettings decode(FriendlyByteBuf buf) {
@@ -134,7 +146,8 @@ public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boole
                 buf.readEnum(TrackBed.class),
                 buf.readBoolean(),
                 buf.readVarInt(),
-                buf.readBoolean());
+                buf.readBoolean(),
+                buf.readEnum(RailStyle.class));
     }
 
     public static int clampLength(int value) {

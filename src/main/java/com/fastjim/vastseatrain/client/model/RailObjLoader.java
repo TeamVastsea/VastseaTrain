@@ -27,6 +27,24 @@ public class RailObjLoader implements IGeometryLoader<RailObjGeometry> {
         boolean flipV = GsonHelper.getAsBoolean(json, "flip_v", false);
         boolean shadeQuads = GsonHelper.getAsBoolean(json, "shade_quads", true);
 
+        return parse(json, mtlOverride, modelLocation, flipV, shadeQuads, context);
+    }
+
+    /**
+     * 用一份根模型 JSON 解析出几何（不含烘焙）。
+     * <p>
+     * 供弯道加载器复用：弯道方块的其它外观共用这份直道解析逻辑。
+     */
+    RailObjGeometry parse(JsonObject json, JsonDeserializationContext context) {
+        String modelLocation = GsonHelper.getAsString(json, "model");
+        String mtlOverride = GsonHelper.getAsString(json, "mtl_override", null);
+        boolean flipV = GsonHelper.getAsBoolean(json, "flip_v", false);
+        boolean shadeQuads = GsonHelper.getAsBoolean(json, "shade_quads", true);
+        return parse(json, mtlOverride, modelLocation, flipV, shadeQuads, context);
+    }
+
+    private static RailObjGeometry parse(JsonObject json, String mtlOverride, String modelLocation,
+                                         boolean flipV, boolean shadeQuads, JsonDeserializationContext context) {
         return RailObjGeometry.parse(
                 context,
                 json,

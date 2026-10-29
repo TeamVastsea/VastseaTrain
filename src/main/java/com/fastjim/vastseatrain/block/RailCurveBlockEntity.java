@@ -2,6 +2,7 @@ package com.fastjim.vastseatrain.block;
 
 import com.fastjim.vastseatrain.registry.VTBlockEntities;
 import com.fastjim.vastseatrain.track.RailCurve;
+import com.fastjim.vastseatrain.track.RailStyle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -51,21 +52,29 @@ public class RailCurveBlockEntity extends BlockEntity {
     /** 参考信息：半径与左右，供提示/调试使用，不参与渲染。 */
     private int radius;
     private boolean left;
+    /** 这一格用的是哪套外观（弯道方块共用，几何由客户端按外观名选弯道根模型）。 */
+    private RailStyle style = RailStyle.STANDARD;
 
     public RailCurveBlockEntity(BlockPos pos, BlockState state) {
         super(VTBlockEntities.RAIL_CURVE.get(), pos, state);
     }
 
     /** 设置这一格里的全部模型。 */
-    public void setPlacement(List<Entry> placement, int radius, boolean left) {
+    public void setPlacement(List<Entry> placement, int radius, boolean left, RailStyle style) {
         entries.clear();
         entries.addAll(placement);
         this.radius = radius;
         this.left = left;
+        this.style = style == null ? RailStyle.STANDARD : style;
         setChanged();
         if (level != null && level.isClientSide) {
             requestModelDataUpdate();
         }
+    }
+
+    /** 这一格的轨道外观。 */
+    public RailStyle style() {
+        return style;
     }
 
     /** 这一格里的所有模型（可能为空，表示还没同步到）。 */
@@ -95,6 +104,7 @@ public class RailCurveBlockEntity extends BlockEntity {
         tag.put("Strips", list);
         tag.putInt("Radius", radius);
         tag.putBoolean("Left", left);
+        tag.putString("Style", style.getSerializedName());
     }
 
     @Override
@@ -108,6 +118,7 @@ public class RailCurveBlockEntity extends BlockEntity {
         }
         radius = tag.getInt("Radius");
         left = tag.getBoolean("Left");
+        style = RailStyle.byName(tag.getString("Style"));
     }
 
     /** 方块更新包：让客户端一收到数据就能改动渲染，避免先渲染成直道再跳变。 */

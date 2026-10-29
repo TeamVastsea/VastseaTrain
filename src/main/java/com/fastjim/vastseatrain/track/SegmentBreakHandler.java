@@ -41,8 +41,8 @@ public final class SegmentBreakHandler {
         segments.removeSegment(level, segmentId);
     }
 
-    /** 直道与弯道格都算“轨道成员”。 */
+    /** 直道与弯道格都算“轨道成员”（含切换外观后新加入的直道方块）。 */
     private static boolean isTrack(BlockState state) {
-        return state.is(VTBlocks.RAIL.get()) || state.is(VTBlocks.RAIL_CURVE.get());
+        return VTBlocks.isTrack(state.getBlock());
     }
 }

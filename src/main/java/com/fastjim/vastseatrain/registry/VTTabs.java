@@ -20,6 +20,7 @@ public final class VTTabs {
                     .displayItems((parameters, output) -> {
                         output.accept(VTItems.TRACK_BLUEPRINT.get());
                         output.accept(VTItems.RAIL.get());
+                        output.accept(VTItems.RAIL_SLAB.get());
                                     })
                     .build());
 

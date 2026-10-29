@@ -3,6 +3,7 @@ package com.fastjim.vastseatrain.client.model;
 import com.fastjim.vastseatrain.block.RailCurveBlockEntity;
 import com.fastjim.vastseatrain.block.RailCurveBlockEntity.Entry;
 import com.fastjim.vastseatrain.track.RailCurve;
+import com.fastjim.vastseatrain.track.RailStyle;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
@@ -25,6 +26,7 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 弯道渲染：把整份轨道模型按方块实体给出的旋转角转到切线方向，再平移到条带中心所在位置。
@@ -47,21 +49,36 @@ import java.util.List;
 public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
     /** 每个弯道格里的模型列表。 */
     public static final ModelProperty<List<Entry>> STRIPS = new ModelProperty<>();
+    /** 每个弯道格的外观（旧存档没有时会变成空，按默认外观渲染）。 */
+    public static final ModelProperty<RailStyle> STYLE = new ModelProperty<>();
+
+    /** 一套外观的弯道面数据（模型原点 + 面）。 */
+    public record StyleFaces(Vector3f origin, List<RailObjGeometry.Face> faces) {
+    }
 
     private final Vector3f origin;
     private final List<RailObjGeometry.Face> faces;
+    /** 其它外观的面数据；本方块对应外观（默认外观）用上面的 {@link #origin}/{@link #faces}。 */
+    private final Map<RailStyle, StyleFaces> styles;
     private final boolean ambientOcclusion;
 
     public RailCurveBakedModel(BakedModel straight, Vector3f origin,
                                List<RailObjGeometry.Face> faces, boolean ambientOcclusion) {
+        this(straight, origin, faces, Map.of(), ambientOcclusion);
+    }
+
+    public RailCurveBakedModel(BakedModel straight, Vector3f origin,
+                               List<RailObjGeometry.Face> faces, Map<RailStyle, StyleFaces> styles,
+                               boolean ambientOcclusion) {
         super(straight);
         this.origin = origin;
         this.faces = faces;
+        this.styles = styles;
         this.ambientOcclusion = ambientOcclusion;
     }
 
     /**
-     * 从方块实体取出这一格的摆放参数。
+     * 从方块实体取出这一格的摆放参数与外观。
      * <p>
      * 直接读方块实体、不经过 {@code ModelDataManager}：后者需要方块实体自己调用刷新，
      * 存档重载 / 客户端刚收到方块数据时容易晚一拍，导致轨道先渲染成直道再跳变。
@@ -73,7 +90,7 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         if (level.getBlockEntity(pos) instanceof RailCurveBlockEntity curve) {
             List<Entry> strips = curve.entries();
             if (!strips.isEmpty()) {
-                return ModelData.builder().with(STRIPS, strips).build();
+                return ModelData.builder().with(STRIPS, strips).with(STYLE, curve.style()).build();
             }
         }
         return modelData;
@@ -95,11 +112,15 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         if (strips == null || strips.isEmpty()) {
             return List.of();
         }
-        List<BakedQuad> quads = new ArrayList<>(faces.size() * strips.size());
+        RailStyle style = data.get(STYLE);
+        StyleFaces source = style == null ? null : styles.get(style);
+        Vector3f usedOrigin = source == null ? origin : source.origin();
+        List<RailObjGeometry.Face> usedFaces = source == null ? faces : source.faces();
+        List<BakedQuad> quads = new ArrayList<>(usedFaces.size() * strips.size());
         for (Entry strip : strips) {
             RailCurve.Transform transform = strip.transform();
-            for (RailObjGeometry.Face face : faces) {
-                BakedQuad quad = build(face, transform);
+            for (RailObjGeometry.Face face : usedFaces) {
+                BakedQuad quad = build(face, transform, usedOrigin);
                 if (quad != null) {
                     quads.add(quad);
                 }
@@ -110,7 +131,7 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
 
     /** 把一个三角面按摆放参数变换后写成 {@link BakedQuad}（第 4 角与第 3 角重合）。 */
     @Nullable
-    private BakedQuad build(RailObjGeometry.Face face, RailCurve.Transform transform) {
+    private BakedQuad build(RailObjGeometry.Face face, RailCurve.Transform transform, Vector3f origin) {
         float[] p = face.position();
         int count = face.vertexCount();
         if (count < 3) {
