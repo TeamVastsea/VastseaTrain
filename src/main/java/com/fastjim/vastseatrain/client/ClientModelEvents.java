@@ -1,6 +1,7 @@
 package com.fastjim.vastseatrain.client;
 
 import com.fastjim.vastseatrain.VastseaTrain;
+import com.fastjim.vastseatrain.client.model.RailCurveObjLoader;
 import com.fastjim.vastseatrain.client.model.RailObjLoader;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ModelEvent;
@@ -20,5 +21,6 @@ public final class ClientModelEvents {
     @SubscribeEvent
     public static void onRegisterGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
         event.register("rail_obj", new RailObjLoader());
+        event.register("rail_curve_obj", new RailCurveObjLoader());
     }
 }

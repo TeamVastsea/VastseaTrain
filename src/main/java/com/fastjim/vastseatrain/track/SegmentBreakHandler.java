@@ -27,8 +27,7 @@ public final class SegmentBreakHandler {
             return;
         }
         BlockState state = event.getState();
-        boolean isRail = state.is(VTBlocks.RAIL.get());
-        if (!isRail) {
+        if (!isTrack(state)) {
             return;
         }
         TrackSegments segments = TrackSegments.get(level);
@@ -40,5 +39,10 @@ public final class SegmentBreakHandler {
         event.setCanceled(true);
         level.removeBlock(event.getPos(), false);
         segments.removeSegment(level, segmentId);
+    }
+
+    /** 直道与弯道格都算“轨道成员”。 */
+    private static boolean isTrack(BlockState state) {
+        return state.is(VTBlocks.RAIL.get()) || state.is(VTBlocks.RAIL_CURVE.get());
     }
 }

@@ -324,6 +324,71 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         return builder.build();
     }
 
+    // ------------------------------------------------------------------ 弯道
+
+    /**
+     * 一个可以直接重放的三角面（渲染成四边形，第 4 角与第 3 角重合）。
+     * <p>
+     * 坐标是模型局部坐标（原点在段中心、前进方向 −X、宽度沿 Z），<b>没有</b>做平移与旋转；
+     * 弯道模型在区块烘焙时按方块实体给出的角度与偏移现算世界位置。
+     */
+    public record Face(TextureAtlasSprite sprite, float[] position, float[] u, float[] v) {
+        /** 顶点数（每 3 个 float 一个顶点）。 */
+        public int vertexCount() {
+            return position.length / 3;
+        }
+    }
+
+    /**
+     * 把整份模型整理成可重放的面列表，不做任何姿态变换。
+     * <p>
+     * 处理顺序与直道烘焙完全一致：先拼补丁（共用边并集，消除接缝空洞），再按 UV 整数格切块并扇形三角化。
+     * 弯道模型每格都会重放一次这份数据，所以只在这里算一次。
+     *
+     * @param materialSprites 材质引用（如 {@code #ballast}）→ 图集贴图
+     */
+    public List<Face> toFaces(Function<String, TextureAtlasSprite> materialSprites) {
+        List<Face> faces = new ArrayList<>();
+        for (Mesh mesh : meshes.values()) {
+            TextureAtlasSprite sprite = materialSprites.apply(mesh.texture);
+            List<Triangle> triangles = mesh.triangles;
+            float[] data = new float[triangles.size() * 15];
+            for (int t = 0; t < triangles.size(); t++) {
+                Triangle triangle = triangles.get(t);
+                for (int i = 0; i < 3; i++) {
+                    int base = (t * 3 + i) * 5;
+                    data[base] = triangle.position()[i].x();
+                    data[base + 1] = triangle.position()[i].y();
+                    data[base + 2] = triangle.position()[i].z();
+                    data[base + 3] = triangle.u()[i];
+                    data[base + 4] = triangle.v()[i];
+                }
+            }
+            RailMeshStitcher.Result result = RailMeshStitcher.stitch(data, triangles.size());
+            for (RailMeshStitcher.Patch patch : result.patches()) {
+                for (Triangle piece : tilePatch(patch)) {
+                    faces.add(new Face(sprite,
+                            new float[]{
+                                    piece.position()[0].x(), piece.position()[0].y(), piece.position()[0].z(),
+                                    piece.position()[1].x(), piece.position()[1].y(), piece.position()[1].z(),
+                                    piece.position()[2].x(), piece.position()[2].y(), piece.position()[2].z()},
+                            piece.u(), piece.v()));
+                }
+            }
+        }
+        return faces;
+    }
+
+    /** 模型原点在方块局部坐标里的位置（直道为方块中心）。 */
+    public Vector3f origin() {
+        return new Vector3f(translation);
+    }
+
+    /** 是否按面朝向做明暗。 */
+    public boolean shadeQuads() {
+        return shadeQuads;
+    }
+
     /**
      * 把一个拼接好的补丁展开成三角面列表：先按 UV 整数格切块，再逐块扇形三角化。
      * <p>

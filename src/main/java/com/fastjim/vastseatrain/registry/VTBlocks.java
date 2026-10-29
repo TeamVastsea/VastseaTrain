@@ -2,6 +2,7 @@ package com.fastjim.vastseatrain.registry;
 
 import com.fastjim.vastseatrain.VastseaTrain;
 import com.fastjim.vastseatrain.block.RailBlock;
+import com.fastjim.vastseatrain.block.RailCurveBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -25,6 +26,16 @@ public final class VTBlocks {
      */
     public static final RegistryObject<Block> RAIL = BLOCKS.register("rail",
             () -> new RailBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.WOOD)
+                    .strength(2.0F, 6.0F)
+                    .sound(SoundType.WOOD)));
+
+    /**
+     * 弯道格：每格一个方块实体，保存这份模型的旋转角与格内偏移（见 {@link RailCurveBlock}）。
+     * 形状与阴影规则与直道一致，同样<b>不能</b>调用 {@code noOcclusion()}。
+     */
+    public static final RegistryObject<Block> RAIL_CURVE = BLOCKS.register("rail_curve",
+            () -> new RailCurveBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.WOOD)
                     .strength(2.0F, 6.0F)
                     .sound(SoundType.WOOD)));

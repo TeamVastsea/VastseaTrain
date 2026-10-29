@@ -5,6 +5,7 @@
   "item.vastseatrain.rail": "轨道",
 
   "block.vastseatrain.rail": "轨道",
+  "block.vastseatrain.rail_curve": "弯道轨道",
 
   "screen.vastseatrain.blueprint": "轨道蓝图",
   "gui.vastseatrain.section.track": "轨道参数",
@@ -18,6 +19,15 @@
   "gui.vastseatrain.on": "开",
   "gui.vastseatrain.off": "关",
   "gui.vastseatrain.curve_soon": "曲线（后续版本）",
+  "gui.vastseatrain.mode": "铺设模式：%s",
+  "gui.vastseatrain.mode.straight": "直道",
+  "gui.vastseatrain.mode.curve": "90° 弯道",
+  "gui.vastseatrain.curve_radius": "弯道半径：%s 格",
+  "gui.vastseatrain.curve_dir": "转向：%s",
+  "gui.vastseatrain.curve_left": "左转",
+  "gui.vastseatrain.curve_right": "右转",
+  "gui.vastseatrain.curve_warn": "半径超过 %s 格：本段需 %s 格方块，铺设与渲染会明显变慢",
+  "gui.vastseatrain.curve_estimate": "估算条带：%s 条",
   "gui.vastseatrain.apply": "完成",
   "gui.vastseatrain.hint": "右键地面铺轨，右键空气再次打开本界面",
 
@@ -30,6 +40,7 @@
   "bed.vastseatrain.none": "无道床",
 
   "tooltip.vastseatrain.length": "长度：%s 段",
+  "tooltip.vastseatrain.curve_radius": "弯道半径：%s 格",
   "tooltip.vastseatrain.gauge": "轨距：%s",
   "tooltip.vastseatrain.bed": "道床：%s",
   "tooltip.vastseatrain.usage": "右键空气配置，右键地面铺设",
@@ -41,6 +52,9 @@
   "summary.vastseatrain.bed": "道床：%s",
 
   "message.vastseatrain.placed": "已铺设 %s 段直线轨道",
+  "message.vastseatrain.placed_curve": "已铺设 90° 弯道：半径 %s 格，%s，共 %s 条",
+  "message.vastseatrain.curve_left": "左转",
+  "message.vastseatrain.curve_right": "右转",
   "message.vastseatrain.blocked": "位置 (%s, %s, %s) 被占用，铺设已取消",
   "message.vastseatrain.out_of_world": "铺设范围超出世界边界 (%s, %s)",
   "message.vastseatrain.no_ground_at": "位置 (%s, %s, %s) 下方悬空，铺设已取消",

@@ -102,7 +102,7 @@ public class TrackSegments extends SavedData {
         for (BlockPos pos : positions) {
             byPos.remove(pos);
             BlockState state = level.getBlockState(pos);
-            if (state.is(VTBlocks.RAIL.get())) {
+            if (state.is(VTBlocks.RAIL.get()) || state.is(VTBlocks.RAIL_CURVE.get())) {
                 level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
                 removed++;
             }

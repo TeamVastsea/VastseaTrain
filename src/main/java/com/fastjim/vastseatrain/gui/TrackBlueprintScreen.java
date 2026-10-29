@@ -1,5 +1,6 @@
 package com.fastjim.vastseatrain.gui;
 
+import com.fastjim.vastseatrain.VTConfig;
 import com.fastjim.vastseatrain.network.NetworkHandler;
 import com.fastjim.vastseatrain.network.SaveBlueprintMessage;
 import com.fastjim.vastseatrain.track.BlueprintSettings;
@@ -36,6 +37,10 @@ public class TrackBlueprintScreen extends Screen {
 
     private EditBox lengthBox;
     private LengthSlider lengthSlider;
+    private RadiusSlider radiusSlider;
+    private Button modeButton;
+    private Button turnButton;
+    private Button gaugeButton;
 
     /** 当前缩放倍数（像素 / 设计单位），在 {@link #init()} 中按窗口尺寸计算。 */
     private float scale = 1.0F;
@@ -61,7 +66,18 @@ public class TrackBlueprintScreen extends Screen {
         int rightX = PADDING + (PANEL_WIDTH + PANEL_GAP) * 2 + PADDING;
         int innerWidth = PANEL_WIDTH - PADDING * 2;
 
-        lengthSlider = addRenderableWidget(new LengthSlider(sx(leftX), sy(top + 20), si(innerWidth), si(20),
+        // 左栏：铺设模式（直道 / 90° 弯道）
+        modeButton = addRenderableWidget(Button.builder(modeLabel(), b -> {
+            settings = settings.withCurveRadius(settings.isCurve() ? 0 : VTConfig.defaultRadius());
+            if (settings.isCurve() && radiusSlider != null) {
+                radiusSlider.setRadiusSilently(settings.curveRadius());
+            }
+            b.setMessage(modeLabel());
+            railControlsVisible(settings.isCurve(), true);
+        }).bounds(sx(leftX), sy(top + 20), si(innerWidth), si(20)).build());
+
+        // 左栏：直道长度
+        lengthSlider = addRenderableWidget(new LengthSlider(sx(leftX), sy(top + 62), si(innerWidth), si(20),
                 settings.length(), value -> {
                     settings = settings.withLength(value);
                     if (lengthBox != null && !lengthBox.isFocused()) {
@@ -69,7 +85,7 @@ public class TrackBlueprintScreen extends Screen {
                     }
                 }));
 
-        lengthBox = new EditBox(font, sx(leftX), sy(top + 62), si(62), si(18),
+        lengthBox = new EditBox(font, sx(leftX), sy(top + 104), si(62), si(18),
                 Component.translatable("gui.vastseatrain.length"));
         lengthBox.setValue(Integer.toString(settings.length()));
         lengthBox.setFilter(text -> text.isEmpty()
@@ -86,10 +102,26 @@ public class TrackBlueprintScreen extends Screen {
         });
         addRenderableWidget(lengthBox);
 
-        addRenderableWidget(Button.builder(gaugeLabel(), b -> {
+        // 左栏（弯道模式）：半径滑条 + 左右转
+        int curveRadius = settings.isCurve() ? settings.curveRadius() : VTConfig.defaultRadius();
+        radiusSlider = addRenderableWidget(new RadiusSlider(sx(leftX), sy(top + 62), si(innerWidth), si(20),
+                curveRadius, value -> settings = settings.withCurveRadius(value)));
+        radiusSlider.active = settings.isCurve();
+        radiusSlider.visible = settings.isCurve();
+
+        turnButton = addRenderableWidget(Button.builder(turnLabel(), b -> {
+            settings = settings.withCurveLeft(!settings.curveLeft());
+            b.setMessage(turnLabel());
+        }).bounds(sx(leftX), sy(top + 104), si(innerWidth), si(20)).build());
+        turnButton.active = settings.isCurve();
+        turnButton.visible = settings.isCurve();
+
+        gaugeButton = addRenderableWidget(Button.builder(gaugeLabel(), b -> {
             settings = settings.withGauge(settings.gauge().next());
             b.setMessage(gaugeLabel());
-        }).bounds(sx(leftX), sy(top + 112), si(innerWidth), si(20)).build());
+        }).bounds(sx(leftX), sy(top + 148), si(innerWidth), si(20)).build());
+
+        railControlsVisible(settings.isCurve(), false);
 
         addRenderableWidget(Button.builder(bedLabel(), b -> {
             settings = settings.withBed(settings.bed().next());
@@ -101,15 +133,38 @@ public class TrackBlueprintScreen extends Screen {
             b.setMessage(previewLabel());
         }).bounds(sx(middleX), sy(top + 62), si(innerWidth), si(20)).build());
 
-        Button curveButton = addRenderableWidget(Button.builder(
-                Component.translatable("gui.vastseatrain.curve_soon"), b -> {
-                }).bounds(sx(middleX), sy(top + 104), si(innerWidth), si(19)).build());
-        curveButton.active = false;
-
         addRenderableWidget(Button.builder(Component.translatable("gui.vastseatrain.apply"), b -> applyAndClose())
                 .bounds(sx(rightX), sy(top + 112), si(innerWidth), si(20)).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
                 .bounds(sx(rightX), sy(top + 136), si(innerWidth), si(20)).build());
+    }
+
+    /**
+     * 直道控件（长度）与弯道控件（半径、转向）互斥显示。
+     *
+     * @param curve 当前是否弯道模式
+     * @param keep  是否保留切换前的输入值（切换到弯道时把长度框内容留着，切回来不必重输）
+     */
+    private void railControlsVisible(boolean curve, boolean keep) {
+        if (lengthSlider != null) {
+            lengthSlider.visible = !curve;
+            lengthSlider.active = !curve;
+        }
+        if (lengthBox != null) {
+            lengthBox.visible = !curve;
+            lengthBox.setEditable(!curve);
+            if (!keep) {
+                lengthBox.setFocused(false);
+            }
+        }
+        if (radiusSlider != null) {
+            radiusSlider.visible = curve;
+            radiusSlider.active = curve;
+        }
+        if (turnButton != null) {
+            turnButton.visible = curve;
+            turnButton.active = curve;
+        }
     }
 
     /** 屏幕放不下设计尺寸时整体等比缩小；最小不低于 1/2。 */
@@ -185,6 +240,16 @@ public class TrackBlueprintScreen extends Screen {
         return Component.translatable("gui.vastseatrain.gauge", settings.gauge().getDisplayName());
     }
 
+    private Component modeLabel() {
+        return Component.translatable("gui.vastseatrain.mode", Component.translatable(settings.isCurve()
+                ? "gui.vastseatrain.mode.curve" : "gui.vastseatrain.mode.straight"));
+    }
+
+    private Component turnLabel() {
+        return Component.translatable("gui.vastseatrain.curve_dir", Component.translatable(settings.curveLeft()
+                ? "gui.vastseatrain.curve_left" : "gui.vastseatrain.curve_right"));
+    }
+
     private Component bedLabel() {
         return Component.translatable("gui.vastseatrain.bed", settings.bed().getDisplayName());
     }
@@ -221,17 +286,38 @@ public class TrackBlueprintScreen extends Screen {
 
         graphics.drawCenteredString(font, title, DESIGN_WIDTH / 2, 8, 0xFFFFFF);
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.track"), leftX, top + PADDING, 0xFFD27F);
-        graphics.drawString(font, Component.translatable("gui.vastseatrain.length"), leftX, top + 52, 0xA0A0A0);
+        if (settings.isCurve()) {
+            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_radius", settings.curveRadius()),
+                    leftX, top + 52, 0xA0A0A0);
+        } else {
+            graphics.drawString(font, Component.translatable("gui.vastseatrain.length"), leftX, top + 52, 0xA0A0A0);
+        }
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.bed"), middleX + PADDING, top + PADDING, 0xFFD27F);
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.summary"), rightX + PADDING, top + PADDING, 0xFFD27F);
 
         int summaryX = rightX + PADDING;
         int summaryY = top + 24;
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.length", settings.length()), summaryX, summaryY, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.blocks", settings.totalBlocks()), summaryX, summaryY + 12, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.width", TrackLayout.WIDTH_BLOCKS), summaryX, summaryY + 24, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.gauge", settings.gauge().getDisplayName()), summaryX, summaryY + 36, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("summary.vastseatrain.bed", settings.bed().getDisplayName()), summaryX, summaryY + 48, 0xFFFFFF);
+        if (settings.isCurve()) {
+            graphics.drawString(font, Component.translatable("summary.vastseatrain.length",
+                    Component.translatable("gui.vastseatrain.mode.curve")), summaryX, summaryY, 0xFFFFFF);
+            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_radius", settings.curveRadius()),
+                    summaryX, summaryY + 12, 0xFFFFFF);
+            graphics.drawString(font, turnLabel(), summaryX, summaryY + 24, 0xFFFFFF);
+            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_estimate", settings.totalBlocks()),
+                    summaryX, summaryY + 36, 0xFFFFFF);
+        } else {
+            graphics.drawString(font, Component.translatable("summary.vastseatrain.length", settings.length()), summaryX, summaryY, 0xFFFFFF);
+            graphics.drawString(font, Component.translatable("summary.vastseatrain.blocks", settings.totalBlocks()), summaryX, summaryY + 12, 0xFFFFFF);
+            graphics.drawString(font, Component.translatable("summary.vastseatrain.width", TrackLayout.WIDTH_BLOCKS), summaryX, summaryY + 24, 0xFFFFFF);
+            graphics.drawString(font, Component.translatable("summary.vastseatrain.gauge", settings.gauge().getDisplayName()), summaryX, summaryY + 36, 0xFFFFFF);
+            graphics.drawString(font, Component.translatable("summary.vastseatrain.bed", settings.bed().getDisplayName()), summaryX, summaryY + 48, 0xFFFFFF);
+        }
+
+        // 半径过大时给出性能提示：条带数 = 每格一条模型，数量直接影响铺设耗时与渲染负担
+        if (settings.isCurve() && VTConfig.needsWarning(settings.curveRadius())) {
+            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_warn",
+                    VTConfig.warnRadius(), settings.totalBlocks()), summaryX, summaryY + 62, 0xFF6B6B);
+        }
 
         // 控件坐标为设计坐标，与文字同一套 pose，确保“画在哪就在哪点得中”
         for (Renderable renderable : this.renderables) {
@@ -283,6 +369,50 @@ public class TrackBlueprintScreen extends Screen {
             int length = BlueprintSettings.clampLength(currentLength());
             value = toRatio(length);
             onChange.accept(length);
+        }
+    }
+
+    /**
+     * 弯道半径滑条：{@code minRadius} ~ {@code maxRadius}（来自配置）。
+     * <p>
+     * 滑条是线性映射，半径很大时小半径端会挤在一起；切换时用 {@link #setRadiusSilently} 保持显示正确。
+     */
+    private static final class RadiusSlider extends AbstractSliderButton {
+        private final IntConsumer onChange;
+
+        RadiusSlider(int x, int y, int width, int height, int radius, IntConsumer onChange) {
+            super(x, y, width, height, Component.empty(), toRatio(radius));
+            this.onChange = onChange;
+        }
+
+        private static double toRatio(int radius) {
+            int min = VTConfig.minRadius();
+            int max = VTConfig.maxRadius();
+            int clamped = VTConfig.clampRadius(radius);
+            return max <= min ? 0.0D : (double) (clamped - min) / (max - min);
+        }
+
+        private int currentRadius() {
+            int min = VTConfig.minRadius();
+            int max = VTConfig.maxRadius();
+            return VTConfig.clampRadius(min + (int) Math.round(value * (max - min)));
+        }
+
+        void setRadiusSilently(int radius) {
+            value = Mth.clamp(toRatio(radius), 0.0D, 1.0D);
+            updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            setMessage(Component.translatable("gui.vastseatrain.curve_radius", currentRadius()));
+        }
+
+        @Override
+        protected void applyValue() {
+            int radius = currentRadius();
+            value = toRatio(radius);
+            onChange.accept(radius);
         }
     }
 }

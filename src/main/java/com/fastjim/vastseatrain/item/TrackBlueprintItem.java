@@ -88,8 +88,14 @@ public class TrackBlueprintItem extends Item {
                 serverPlayer.displayClientMessage(failure.copy().withStyle(ChatFormatting.RED), true);
                 return InteractionResult.FAIL;
             }
-            serverPlayer.displayClientMessage(Component.translatable("message.vastseatrain.placed",
-                    settings.length()).withStyle(ChatFormatting.GREEN), true);
+            Component success = settings.isCurve()
+                    ? Component.translatable("message.vastseatrain.placed_curve",
+                            settings.curveRadius(),
+                            Component.translatable(settings.curveLeft()
+                                    ? "message.vastseatrain.curve_left" : "message.vastseatrain.curve_right"),
+                            settings.totalBlocks())
+                    : Component.translatable("message.vastseatrain.placed", settings.length());
+            serverPlayer.displayClientMessage(success.copy().withStyle(ChatFormatting.GREEN), true);
         }
         return InteractionResult.SUCCESS;
     }
@@ -97,7 +103,16 @@ public class TrackBlueprintItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         BlueprintSettings settings = BlueprintSettings.from(stack);
-        tooltip.add(Component.translatable("tooltip.vastseatrain.length", settings.length()).withStyle(ChatFormatting.GRAY));
+        if (settings.isCurve()) {
+            tooltip.add(Component.translatable("tooltip.vastseatrain.curve_radius", settings.curveRadius())
+                    .withStyle(ChatFormatting.GRAY));
+            tooltip.add(Component.translatable(settings.curveLeft()
+                            ? "message.vastseatrain.curve_left" : "message.vastseatrain.curve_right")
+                    .withStyle(ChatFormatting.GRAY));
+        } else {
+            tooltip.add(Component.translatable("tooltip.vastseatrain.length", settings.length())
+                    .withStyle(ChatFormatting.GRAY));
+        }
         tooltip.add(Component.translatable("tooltip.vastseatrain.gauge", settings.gauge().getDisplayName()).withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.vastseatrain.bed", settings.bed().getDisplayName()).withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.vastseatrain.usage").withStyle(ChatFormatting.DARK_GRAY));

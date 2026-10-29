@@ -1,12 +1,15 @@
 package com.fastjim.vastseatrain.track;
 
 import com.fastjim.vastseatrain.block.RailBlock;
+import com.fastjim.vastseatrain.block.RailCurveBlock;
+import com.fastjim.vastseatrain.block.RailCurveBlockEntity;
 import com.fastjim.vastseatrain.registry.VTBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -16,19 +19,34 @@ import java.util.UUID;
 /**
  * 服务器端铺轨。世界修改只在这里发生；全部校验通过后才开始写入，避免留下半截轨道。
  * <p>
- * 每格只放一个 {@code rail} 方块（模型自身横跨 3 格宽，不再并排铺 3 条轨道），
- * 沿方向逐格前推，相邻段首尾相接。
+ * 每格只放一个轨道方块（模型自身横跨 3 格宽，不再并排铺 3 条轨道）：
+ * <ul>
+ *     <li>直道：{@code rail} 方块，沿方向逐格前推；</li>
+ *     <li>弯道：{@code rail_curve} 方块，位置由 {@link CurvePlan} 沿弧线算出，
+ *     每格的旋转角与格内偏移写进方块实体，客户端按此摆放整份模型。</li>
+ * </ul>
+ * 直道与弯道在入口处共用同一个点（入口格中心），所以连续铺设时首尾相接。
  */
 public final class TrackPlacer {
     private TrackPlacer() {
     }
 
     /**
-     * 从 {@code origin} 开始沿 {@code dir} 方向铺设直线轨道，每段 1 格长。
+     * 从 {@code origin} 开始沿 {@code dir} 方向铺设。
+     * {@code origin} 是入口格：直道的第 1 段 / 弯道弧长 0 所在的格。
      *
      * @return null 表示成功，否则返回失败原因（已本地化）
      */
     public static Component place(ServerLevel level, BlockPos origin, Direction dir, BlueprintSettings settings) {
+        if (settings.isCurve()) {
+            return placeCurve(level, origin, dir, settings);
+        }
+        return placeStraight(level, origin, dir, settings);
+    }
+
+    /** 直线轨道。 */
+    private static Component placeStraight(ServerLevel level, BlockPos origin, Direction dir,
+                                           BlueprintSettings settings) {
         if (!level.isInWorldBounds(origin)) {
             return Component.translatable("message.vastseatrain.out_of_world", origin.getX(), origin.getZ());
         }
@@ -36,18 +54,9 @@ public final class TrackPlacer {
         BlockPos[] positions = TrackLayout.footprint(origin, dir, settings.length());
 
         for (BlockPos pos : positions) {
-            if (!level.isInWorldBounds(pos)) {
-                return Component.translatable("message.vastseatrain.out_of_world", pos.getX(), pos.getZ());
-            }
-            BlockState existing = level.getBlockState(pos);
-            if (existing.is(VTBlocks.RAIL.get())) {
-                continue;
-            }
-            if (!existing.canBeReplaced()) {
-                return Component.translatable("message.vastseatrain.blocked", pos.getX(), pos.getY(), pos.getZ());
-            }
-            if (level.getBlockState(pos.below()).isAir()) {
-                return Component.translatable("message.vastseatrain.no_ground_at", pos.getX(), pos.getY(), pos.getZ());
+            Component failure = checkPlaceable(level, pos);
+            if (failure != null) {
+                return failure;
             }
         }
 
@@ -62,6 +71,60 @@ public final class TrackPlacer {
         }
         // 整段登记进存档：后续破坏任意一格都会带动整段移除
         TrackSegments.get(level).addSegment(UUID.randomUUID(), placed);
+        return null;
+    }
+
+    /**
+     * 90° 弯道：沿弧线按 1 格间距摆放整份模型，每格一个 {@code rail_curve} 方块。
+     */
+    private static Component placeCurve(ServerLevel level, BlockPos origin, Direction dir,
+                                        BlueprintSettings settings) {
+        CurvePlan plan = CurvePlan.of(origin, dir, settings.curveLeft(), settings.curveRadius());
+        List<CurvePlan.Piece> pieces = plan.pieces();
+
+        for (CurvePlan.Piece piece : pieces) {
+            Component failure = checkPlaceable(level, piece.pos());
+            if (failure != null) {
+                return failure;
+            }
+        }
+
+        List<BlockPos> placed = new ArrayList<>(pieces.size());
+        for (CurvePlan.Piece piece : pieces) {
+            BlockPos pos = piece.pos();
+            BlockState state = VTBlocks.RAIL_CURVE.get().defaultBlockState()
+                    .setValue(RailCurveBlock.FACING, piece.facing());
+            level.setBlock(pos, state, Block.UPDATE_ALL);
+            BlockEntity entity = level.getBlockEntity(pos);
+            if (entity instanceof RailCurveBlockEntity curve) {
+                curve.setPlacement(piece.angle(), piece.offsetX(), piece.offsetZ(),
+                        plan.radius(), plan.left());
+            }
+            placed.add(pos);
+        }
+        TrackSegments.get(level).addSegment(UUID.randomUUID(), placed);
+        return null;
+    }
+
+    /**
+     * 单格能否铺轨：世界里已有轨道格的直接跳过，其他非可替换方块与下方悬空都算失败。
+     *
+     * @return null 表示可以铺
+     */
+    private static Component checkPlaceable(ServerLevel level, BlockPos pos) {
+        if (!level.isInWorldBounds(pos)) {
+            return Component.translatable("message.vastseatrain.out_of_world", pos.getX(), pos.getZ());
+        }
+        BlockState existing = level.getBlockState(pos);
+        if (existing.is(VTBlocks.RAIL.get()) || existing.is(VTBlocks.RAIL_CURVE.get())) {
+            return null;
+        }
+        if (!existing.canBeReplaced()) {
+            return Component.translatable("message.vastseatrain.blocked", pos.getX(), pos.getY(), pos.getZ());
+        }
+        if (level.getBlockState(pos.below()).isAir()) {
+            return Component.translatable("message.vastseatrain.no_ground_at", pos.getX(), pos.getY(), pos.getZ());
+        }
         return null;
     }
 }

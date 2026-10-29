@@ -5,6 +5,7 @@
   "item.vastseatrain.rail": "Rail Segment",
 
   "block.vastseatrain.rail": "Rail Segment",
+  "block.vastseatrain.rail_curve": "Curved Rail Segment",
 
   "screen.vastseatrain.blueprint": "Track Blueprint",
   "gui.vastseatrain.section.track": "Track",
@@ -18,6 +19,15 @@
   "gui.vastseatrain.on": "On",
   "gui.vastseatrain.off": "Off",
   "gui.vastseatrain.curve_soon": "Curves (coming soon)",
+  "gui.vastseatrain.mode": "Mode: %s",
+  "gui.vastseatrain.mode.straight": "Straight",
+  "gui.vastseatrain.mode.curve": "90° curve",
+  "gui.vastseatrain.curve_radius": "Curve radius: %s blocks",
+  "gui.vastseatrain.curve_dir": "Turn: %s",
+  "gui.vastseatrain.curve_left": "Left",
+  "gui.vastseatrain.curve_right": "Right",
+  "gui.vastseatrain.curve_warn": "Radius above %s: this curve uses %s blocks and will slow placement and rendering",
+  "gui.vastseatrain.curve_estimate": "Estimated strips: %s",
   "gui.vastseatrain.apply": "Done",
   "gui.vastseatrain.hint": "Right-click the ground to lay track, right-click air to reopen this screen",
 
@@ -30,6 +40,7 @@
   "bed.vastseatrain.none": "None",
 
   "tooltip.vastseatrain.length": "Length: %s segments",
+  "tooltip.vastseatrain.curve_radius": "Curve radius: %s blocks",
   "tooltip.vastseatrain.gauge": "Gauge: %s",
   "tooltip.vastseatrain.bed": "Bed: %s",
   "tooltip.vastseatrain.usage": "Right-click air to configure, ground to lay",
@@ -41,6 +52,9 @@
   "summary.vastseatrain.bed": "Bed: %s",
 
   "message.vastseatrain.placed": "Laid %s straight segments",
+  "message.vastseatrain.placed_curve": "Laid 90° curve: radius %s, %s, %s strips",
+  "message.vastseatrain.curve_left": "left turn",
+  "message.vastseatrain.curve_right": "right turn",
   "message.vastseatrain.blocked": "Blocked at (%s, %s, %s); placement cancelled",
   "message.vastseatrain.out_of_world": "Out of world bounds at (%s, %s)",
   "message.vastseatrain.no_ground_at": "No support below (%s, %s, %s); placement cancelled",
