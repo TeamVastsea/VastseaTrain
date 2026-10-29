@@ -16,25 +16,27 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * 一段轨道。{@link #FACING} 指向轨道延伸方向。
- * {@link #MODEL} 为 true 时渲染完整 OBJ 模型（每两格一次），否则只渲染道床占位。
- * 轨道本身不阻挡行走，避免玩家被钢轨卡住。
+ * 一段轨道。{@link #FACING} 指向轨道前进方向。
+ * <p>
+ * 模型来自美术提供的 {@code test.obj}，原样使用、不做任何改动：模型前进方向为 -X，
+ * 轨道横向 3 格、沿前进方向 1 格，轨顶位于方块内 {@code y = 0.75}，道床向下延伸 1 格、
+ * 被下方地面遮住。坐标适配（旋转 90°、抬高 0.75 格）完全放在模型 JSON 里，
+ * 因此方块状态只需要朝向；轨道不提供碰撞，玩家仍站在地面上。
  */
 public class RailBlock extends HorizontalDirectionalBlock {
+    /** 曲线段的预留开关；首版恒为 false，模型不接受该改装。 */
     public static final BooleanProperty CURVED = BooleanProperty.create("curved");
-    public static final BooleanProperty MODEL = BooleanProperty.create("model");
 
     public RailBlock(Properties properties) {
         super(properties);
         registerDefaultState(stateDefinition.any()
-                .setValue(FACING, Direction.NORTH)
-                .setValue(CURVED, false)
-                .setValue(MODEL, true));
+                .setValue(FACING, Direction.WEST)
+                .setValue(CURVED, false));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING, CURVED, MODEL);
+        builder.add(FACING, CURVED);
     }
 
     @Override

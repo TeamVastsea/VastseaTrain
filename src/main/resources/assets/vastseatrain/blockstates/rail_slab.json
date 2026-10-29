@@ -1,12 +1,12 @@
 {
   "variants": {
-    "facing=north,segment_start=true":  { "model": "vastseatrain:block/rail_core", "y": 180 },
-    "facing=east,segment_start=true":   { "model": "vastseatrain:block/rail_core", "y": 270 },
-    "facing=south,segment_start=true":  { "model": "vastseatrain:block/rail_core" },
-    "facing=west,segment_start=true":   { "model": "vastseatrain:block/rail_core", "y": 90 },
-    "facing=north,segment_start=false": { "model": "vastseatrain:block/rail_filler", "y": 180 },
-    "facing=east,segment_start=false":  { "model": "vastseatrain:block/rail_filler", "y": 270 },
-    "facing=south,segment_start=false": { "model": "vastseatrain:block/rail_filler" },
-    "facing=west,segment_start=false":  { "model": "vastseatrain:block/rail_filler", "y": 90 }
+    "facing=east,half=left":   { "model": "vastseatrain:block/rail_slab_left" },
+    "facing=south,half=left":  { "model": "vastseatrain:block/rail_slab_left" },
+    "facing=west,half=left":   { "model": "vastseatrain:block/rail_slab_left" },
+    "facing=north,half=left":  { "model": "vastseatrain:block/rail_slab_left" },
+    "facing=east,half=right":  { "model": "vastseatrain:block/rail_slab_right" },
+    "facing=south,half=right": { "model": "vastseatrain:block/rail_slab_right" },
+    "facing=west,half=right":  { "model": "vastseatrain:block/rail_slab_right" },
+    "facing=north,half=right": { "model": "vastseatrain:block/rail_slab_right" }
   }
 }

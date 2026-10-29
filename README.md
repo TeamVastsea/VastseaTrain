@@ -10,9 +10,9 @@ VastseaTrain 是面向 Minecraft 1.20.1 Forge 的独立轨道交通模组。核�
 - 轨道蓝图：手持右键空气打开三栏界面（参数 / 道床与预览 / 摘要）；右键地面按玩家朝向铺设直线轨道。
 - 铺设参数：长度 1–256 段，轨距与道床可选；参数保存在物品上并同步回服务器。
 - 铺设安全：服务端一次性校验全部占位（越界、被占用、下方悬空），任一失败则整体取消，不留半截轨道。
-- 美术：`b1.obj` 经 `tools/convert_rail_obj.ps1` 换算到方块空间后随包发布，原始文件不参与构建。
+- 美术：`test.obj` / `test.mtl` 原样加载（材质为相对路径），坐标适配只写在模型 JSON 的 `transform` 中，模型文件未做任何修改。
 
-已知限制：曲线与道岔未实现；轨距/道床目前只影响参数与摘要，尚未切换外观；侧向道床每格之间有 0.25 格接缝，等待美术提供专门的肩部件；所有结论来自构建与资源解析校验，尚未在游戏内实机验证。
+已知限制：曲线与道岔未实现；轨距/道床目前只影响参数与摘要，尚未切换外观；侧格与中心格共用同一张道床贴图，拼接缝尚未单独制作；所有结论来自构建与资源解析校验，尚未在游戏内实机验证。
 
 ## 项目文档
 
@@ -48,15 +48,13 @@ VastseaTrain 是面向 Minecraft 1.20.1 Forge 的独立轨道交通模组。核�
 git clone --depth 1 --branch master https://github.com/TeamOpenIndustry/ImmersiveRailroading.git reference/ImmersiveRailroading
 ```
 
-## 轨道美术换算
+## 轨道美术加载
 
-美术提供的 `b1.obj` 以模型中心为原点、Y 向上、沿 +Z 延伸。项目内 `tools/convert_rail_obj.ps1` 把它换算到 Minecraft 方块空间：
+轨道模型直接使用美术提供的 `test.obj` / `test.mtl`（`src/main/resources/assets/vastseatrain/models/block/rail/`），**模型文件不做任何修改**：
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\convert_rail_obj.ps1
-```
+- 模型前进方向为 -X，横向（Z）3 格、纵向 1 格，轨顶 `y = 0.75`，道床向下延伸到方块下方被地面遮住。
+- 材质使用相对路径（`map_Kd gravel.png` 等），贴图位于 `assets/vastseatrain/textures/block/rail/`。
+- 坐标适配全部写在模型 JSON 里：`block/rail/test.json` 绕方块中心旋转 90°、抬高 0.75 格，把模型坐标系对齐到方块坐标系；`rail_core.json`（中心格）、`rail_slab_left.json` / `rail_slab_right.json`（左右道床格，旋转 180° 取对称半边）都从它继承。
+- 中心格渲染完整模型，左右两格通过两套翻转后的 JSON 拼接同一段模型的另外两半；`test_bed.json` 隐藏钢轨分组 `RAIL_LEFT_b` / `RAIL_RIGHT_b`，侧格只渲染道床。
 
-换算规则：按目标段长缩放（默认 2 格），X/Z 居中到方块中心，并把道床顶面（原始 `Y=0.285666`）对齐到方块底面。结果是宽 0.748 格、高 0.818 格、长 2 格，道床向地下延伸约 0.6 格（被地面遮住），轨顶高出地面约 0.217 格。修改段长后重新运行脚本即可，不需要改模型 JSON 的 `transform`。
-
-> 说明：美术模型的宽长比（1.6 : 4.28）与“3 格宽、1 格长”的口径不一致。当前按“一段跨 2 格、无重叠拼接”处理，实际轨距约 0.47 格。若需要 3 格宽的实心轨道，需要美术提供更宽的道床/肩部件或确认缩放口径。
-
+美术重新导出模型时，只要继续保持“前进方向 -X、3 格宽、轨顶 0.75”的约定，直接覆盖 `test.obj` / `test.mtl` 即可，不需要改代码或 JSON。

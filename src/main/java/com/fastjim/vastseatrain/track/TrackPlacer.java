@@ -11,14 +11,14 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * 服务器端铺轨。世界修改只在这里发生；平面校验通过后才开始写入，避免留下半截轨道。
+ * 服务器端铺轨。世界修改只在这里发生；全部平面校验通过后才开始写入，避免留下半截轨道。
  */
 public final class TrackPlacer {
     private TrackPlacer() {
     }
 
     /**
-     * 从 {@code origin} 开始沿 {@code dir} 方向铺设直线轨道。
+     * 从 {@code origin} 开始沿 {@code dir} 方向铺设直线轨道，每段 1 格长、3 格宽。
      *
      * @return null 表示成功，否则返回失败原因（已本地化）
      */
@@ -29,7 +29,6 @@ public final class TrackPlacer {
 
         BlockPos[][] rows = TrackLayout.footprint(origin, dir, settings.length());
 
-        // 整体校验：任何一格被占用或下方悬空，都直接取消
         for (BlockPos[] row : rows) {
             for (BlockPos pos : row) {
                 if (!level.isInWorldBounds(pos)) {
@@ -48,24 +47,23 @@ public final class TrackPlacer {
             }
         }
 
-        for (int row = 0; row < rows.length; row++) {
-            boolean segmentStart = TrackLayout.isSegmentStart(row);
-            BlockState rail = VTBlocks.RAIL.get().defaultBlockState()
-                    .setValue(RailBlock.FACING, dir)
-                    .setValue(RailBlock.MODEL, segmentStart);
-            BlockState slab = VTBlocks.RAIL_SLAB.get().defaultBlockState()
-                    .setValue(RailSlabBlock.FACING, dir)
-                    .setValue(RailSlabBlock.SEGMENT_START, segmentStart);
+        BlockState rail = VTBlocks.RAIL.get().defaultBlockState()
+                .setValue(RailBlock.FACING, dir)
+                .setValue(RailBlock.CURVED, false);
+        BlockState left = VTBlocks.RAIL_SLAB.get().defaultBlockState()
+                .setValue(RailSlabBlock.FACING, dir)
+                .setValue(RailSlabBlock.HALF, RailSlabBlock.Half.LEFT);
+        BlockState right = left.setValue(RailSlabBlock.HALF, RailSlabBlock.Half.RIGHT);
 
-            BlockPos[] step = rows[row];
-            if (!level.getBlockState(step[1]).is(VTBlocks.RAIL.get())) {
-                level.setBlock(step[1], rail, Block.UPDATE_ALL);
+        for (BlockPos[] row : rows) {
+            if (!level.getBlockState(row[1]).is(VTBlocks.RAIL.get())) {
+                level.setBlock(row[1], rail, Block.UPDATE_ALL);
             }
-            if (!level.getBlockState(step[0]).is(VTBlocks.RAIL_SLAB.get())) {
-                level.setBlock(step[0], slab, Block.UPDATE_ALL);
+            if (!level.getBlockState(row[0]).is(VTBlocks.RAIL_SLAB.get())) {
+                level.setBlock(row[0], left, Block.UPDATE_ALL);
             }
-            if (!level.getBlockState(step[2]).is(VTBlocks.RAIL_SLAB.get())) {
-                level.setBlock(step[2], slab, Block.UPDATE_ALL);
+            if (!level.getBlockState(row[2]).is(VTBlocks.RAIL_SLAB.get())) {
+                level.setBlock(row[2], right, Block.UPDATE_ALL);
             }
         }
         return null;

@@ -16,8 +16,9 @@ public final class VTBlocks {
             DeferredRegister.create(ForgeRegistries.BLOCKS, VastseaTrain.MOD_ID);
 
     /**
-     * 轨道主体方块：一个方块承载“一段”轨道，段长按 IR 约定为方块中心间距的 2 倍。
-     * 默认无碰撞，玩家可以踩在轨道模型上；模型自带的道床已延伸到地面以下。
+     * 轨道主体方块：一个方块承载“一段”轨道，段长 1 格（见 {@code TrackLayout.BLOCK_SPAN}）。
+     * 模型按“前进方向 = -X”制作，模型配置文件负责旋转与高度适配，方块本身不再参与朝向。
+     * 默认无碰撞，玩家站在地面；模型自带道床延伸到方块下方被地面遮住。
      */
     public static final RegistryObject<Block> RAIL = BLOCKS.register("rail",
             () -> new RailBlock(BlockBehaviour.Properties.of()
@@ -27,7 +28,7 @@ public final class VTBlocks {
                     .noOcclusion()
                     .isViewBlocking((state, level, pos) -> false)));
 
-    /** 轨道两侧宽度占位方块：让 3 格宽的轨道在碰撞和实体放置上有实际支撑体。 */
+    /** 轨道两侧宽度占位方块：把 3 格宽的轨道补足成实际方块占位。 */
     public static final RegistryObject<Block> RAIL_SLAB = BLOCKS.register("rail_slab",
             () -> new RailSlabBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.STONE)
