@@ -11,6 +11,7 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +29,8 @@ import java.util.Set;
 public final class RailArtSource {
     /** 美术目录（资源路径前缀）。 */
     public static final String SOURCE_DIR = "models/block/rail/";
+    /** 美术目录（不带结尾斜杠，专供 {@code listResources}；带斜杠会抛 Trailing slash 异常）。 */
+    public static final String SOURCE_DIR_NO_SLASH = "models/block/rail";
     /** 贴图目录（资源路径前缀）。 */
     public static final String TARGET_DIR = "textures/block/rail/";
     /** 能用的图片扩展名。 */
@@ -41,10 +44,13 @@ public final class RailArtSource {
     /**
      * 扫描美术目录，返回“图集贴图路径 → 美术来源文件”的映射（都已带扩展名）。
      * 同一名字多格式时已按 png &gt; jpg &gt; jpeg 去重。
+     * <p>
+     * 目录遍历见 {@link #listArtFiles}：<b>不能</b>给 {@code listResources} 传以 {@code /} 结尾的路径，
+     * 1.20.1 会直接抛 {@code IllegalArgumentException: Trailing slash in path}。
      */
     public static Map<ResourceLocation, ResourceLocation> scan(ResourceManager manager) {
         Map<ResourceLocation, ResourceLocation> chosen = new HashMap<>();
-        for (ResourceLocation id : manager.listResources(SOURCE_DIR, RailArtSource::isImage).keySet()) {
+        for (ResourceLocation id : listArtFiles(manager).keySet()) {
             String path = id.getPath();
             int dot = path.lastIndexOf('.');
             if (dot <= 0) {
@@ -59,6 +65,22 @@ public final class RailArtSource {
             }
         }
         return chosen;
+    }
+
+    /**
+     * 列出美术目录里的全部图片文件 → 该文件的资源来源。
+     * <p>
+     * 不能给 {@code listResources} / {@code listResourceStacks} 传<b>以 / 结尾</b>的路径：
+     * 1.20.1 的 {@code MultiPackResourceManager} 会先做
+     * {@code checkTrailingDirectoryPath} 并抛 {@code IllegalArgumentException: Trailing slash in path}。
+     * 传不带斜杠的 {@code models/block/rail} 则只做前缀匹配（能匹配到目录内文件，
+     * 也会顺带匹配 {@code rail_core.json} 这类同前缀文件，由 {@link #isImage} 过滤掉）。
+     */
+    public static Map<ResourceLocation, List<Resource>> listArtFiles(ResourceManager manager) {
+        Map<ResourceLocation, List<Resource>> found = new java.util.TreeMap<>();
+        manager.listResources(SOURCE_DIR_NO_SLASH, RailArtSource::isImage)
+                .forEach((id, resource) -> found.put(id, List.of(resource)));
+        return found;
     }
 
     /** 贴图资源路径（{@code textures/block/rail/x.png}）→ 美术来源文件（单份）。 */
@@ -170,9 +192,9 @@ public final class RailArtSource {
     /** 美术目录里的全部图片（含被多格式去重掉的），按路径排序。 */
     public static Map<String, Long> listFiles(ResourceManager manager) {
         Map<String, Long> files = new java.util.TreeMap<>();
-        manager.listResources(SOURCE_DIR, RailArtSource::isImage).forEach((id, resource) -> {
+        listArtFiles(manager).forEach((id, resources) -> {
             long size = -1;
-            try (InputStream in = resource.open()) {
+            try (InputStream in = resources.get(0).open()) {
                 size = in.readAllBytes().length;
             } catch (Exception e) {
                 VastseaTrain.LOGGER.warn("读取美术文件 {} 的字节数失败", id, e);
@@ -184,6 +206,10 @@ public final class RailArtSource {
 
     static boolean isImage(ResourceLocation id) {
         String path = id.getPath();
+        // 前缀匹配 models/block/rail 时也会匹配到 rail_core.json 这类同前缀文件，这里用带斜杠的前缀挡掉
+        if (!path.startsWith(SOURCE_DIR)) {
+            return false;
+        }
         int dot = path.lastIndexOf('.');
         return dot > SOURCE_DIR.length() && EXTENSIONS.contains(extensionOf(path));
     }

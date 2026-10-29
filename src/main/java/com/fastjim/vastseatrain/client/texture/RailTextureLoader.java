@@ -33,7 +33,8 @@ import java.util.List;
  * 原版那一步交给 Forge 时，{@code spriteImage} 已经是占位 PNG 的像素，
  * 它的 mipmap 层（{@code SpriteContents.byMipLevel}）也是按占位图算好的。
  * 这里把美术图解码、缩放到占位图尺寸后直接写进 {@code spriteImage}，
- * 再调 {@link SpriteContents#increaseMipLevel(int)} 让原版<b>基于新像素重算</b>全部 mipmap 层。
+ * 原版拼图后会对每张贴图调 {@code increaseMipLevel(图集的 mip 级别)}，
+ * 用的源就是这张 {@code spriteImage}，所以 mipmap 会自动基于新像素重算。
  * <b>不改尺寸、不换图对象</b>，所以拼图、UV 全部不受影响。
  * <p>
  * 美术目录里没有同名图片时返回 {@code null}，Forge 会回退成“原版自己加载占位 PNG”。
@@ -73,10 +74,13 @@ public final class RailTextureLoader implements ITextureAtlasSpriteLoader {
             // 注意 animationMetadata 只用来定帧尺寸（FrameSize），帧列表要留空：
             // 空列表时原版按“整张图 = 1 帧”处理；若把带着 {width,height} 的元数据原样传进去，
             // 16x16 的图没事，但 128x128 的图会被当成 16x16 的 64 帧，帧序号和 UV 全错位。
-            SpriteContents contents = new SpriteContents(name, new FrameSize(width, height), spriteImage, DETACHED);
-            // 此时 mipmap 还是按占位图算的，必须基于新像素重算，否则远处/斜看发糊
-            contents.increaseMipLevel(Integer.MAX_VALUE);
-            return contents;
+            //
+            // mipmap 不用在这里算：SpriteLoader.stitch 拼图后会对每张贴图调
+            // increaseMipLevel(图集的 mip 级别)，而它生成 mipmap 用的源就是 byMipLevel[0]，
+            // 也就是上面刚改过像素的这张 spriteImage，所以原版会自动基于新像素重算。
+            // （这里若自己调 increaseMipLevel(Integer.MAX_VALUE)，MAX_VALUE + 1 会溢出成负数，
+            //   原版判断 `mipLevel + 1 > length` 为 false 直接返回旧数组，等于什么都没做。）
+            return new SpriteContents(name, new FrameSize(width, height), spriteImage, DETACHED);
         } catch (Throwable e) {
             // 绝不能抛出异常打断图集重载：记日志后返回 null，由原版回退到占位 PNG
             VastseaTrain.LOGGER.error("美术贴图 {} 读取失败，回退到占位 PNG", name, e);
