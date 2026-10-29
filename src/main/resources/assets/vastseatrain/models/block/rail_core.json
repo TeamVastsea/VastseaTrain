@@ -1,19 +1,20 @@
 {
   "loader": "forge:obj",
   "model": "vastseatrain:models/block/rail/test.obj",
+  "mtl_override": "vastseatrain:models/block/rail_mtl.mtl",
   "flip_v": false,
   "automatic_culling": false,
   "shade_quads": true,
   "emissive_ambient": false,
   "transform": {
-    "translation": [0, 0.625, 0]
+    "translation": [-0.5, 0.5, 0.5]
   },
   "textures": {
     "particle": "vastseatrain:block/rail/gravel",
-    "gravel": "vastseatrain:block/rail/gravel.png",
-    "concrete_silver": "vastseatrain:block/rail/concrete_silver.png",
-    "rail_sleeper_side": "vastseatrain:block/rail/rail_sleeper_side.png",
-    "rail_sleeper_top": "vastseatrain:block/rail/rail_sleeper_top.png",
-    "rail_fastener": "vastseatrain:block/rail/rail_fastener.png"
+    "ballast": "vastseatrain:block/rail/gravel",
+    "concrete_silver": "vastseatrain:block/rail/concrete_silver",
+    "sleeper_side": "vastseatrain:block/rail/rail_sleeper_side",
+    "sleeper_top": "vastseatrain:block/rail/rail_sleeper_top",
+    "fastener": "vastseatrain:block/rail/rail_fastener"
   }
 }

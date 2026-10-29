@@ -1,0 +1,59 @@
+# Blender 5.2.3 LTS MTL File: 'None'
+# www.blender.org
+#
+# Program-side override of the artist MTL, loaded via mtl_override.
+# Material names and parameters mirror test.mtl; only map_Kd is changed to
+# "#name" references resolved by the "textures" block of rail_core.json.
+# The artist MTL cannot be used directly: Forge would resolve its relative
+# map_Kd names into the minecraft namespace (minecraft:rail_sleeper_top etc).
+# This file MUST stay pure ASCII.
+
+newmtl Material_#80
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd #ballast
+
+newmtl Material_#81
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd #concrete_silver
+
+newmtl Material_#82
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd #sleeper_side
+
+newmtl Material_#83
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd #sleeper_top
+
+newmtl Material_#84
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd #fastener

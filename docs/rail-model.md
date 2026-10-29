@@ -1,12 +1,12 @@
 # 轨道美术加载
 
-轨道美术资源由美术直接放进 `assets/vastseatrain/models/block/rail/`，程序**只读、不写**。保护规则见 [`docs/art-assets-policy.md`](docs/art-assets-policy.md)。
+美术资源直接放进 `assets/vastseatrain/models/block/rail/`，程序**只读不写**。保护规则与原理见 [`docs/art-assets-policy.md`](docs/art-assets-policy.md)。
 
 ## 目录划分
 
 ```text
 assets/vastseatrain/models/block/
-  rail/                     ← 纯美术资源，程序禁止写入
+  rail/                     ← 美术目录，程序禁止写入
     test.obj
     test.mtl
     gravel.png
@@ -14,46 +14,34 @@ assets/vastseatrain/models/block/
     rail_sleeper_side.png
     rail_sleeper_top.png
     rail_fastener.png
-  rail_core.json            ← 程序配置：OBJ 加载、贴图映射、摆放变换
-  rail_slab_left.json
-  rail_slab_right.json
-  rail_slab.json
-  rail_filler.json
+  rail_core.json            ← OBJ 加载 + 材质覆盖 + 贴图映射 + 摆放
+  rail_mtl.mtl              ← 材质覆盖文件（程序侧）
+  rail_slab*.json / rail_filler.json
 ```
 
-## 程序如何兼容美术文件
+## 材质为什么不能直接用美术的 MTL
 
-- 不写 `mtl_override`，交给 OBJ 自带的 `mtllib test.mtl` 相对解析。
-- `map_Kd rail_sleeper_top.png` 这类相对文件名会被 Forge 解析成 `vastseatrain:rail_sleeper_top.png`，所以 `rail_core.json` 的 `textures` 段逐个映射：
+Forge 用正则 `(?:.*/assets/(?<ns>[a-z_-]+)/textures/)?(?<path>[a-z_/-]+)\.png` 解析 `map_Kd`：
 
-```json
-"textures": {
-  "gravel": "vastseatrain:block/rail/gravel.png",
-  "concrete_silver": "vastseatrain:block/rail/concrete_silver.png",
-  "rail_sleeper_side": "vastseatrain:block/rail/rail_sleeper_side.png",
-  "rail_sleeper_top": "vastseatrain:block/rail/rail_sleeper_top.png",
-  "rail_fastener": "vastseatrain:block/rail/rail_fastener.png"
-}
-```
+- 美术写的是相对文件名（如 `rail_sleeper_top.png`），路径里没有 `assets/<ns>/textures/`，命名空间捕获为空 → 解析成 `minecraft:rail_sleeper_top`，原版没有 → 紫黑棋盘格；
+- `gravel.png` 正好解析成 `minecraft:gravel`，原版有，所以只有道砟"看似正常"；
+- JSON 的 `textures` 段只在 `map_Kd` 以 `#` 开头时才生效。
 
-美术新增贴图时，程序只在 `rail_core.json` 补一行映射。
+所以程序提供一个 `rail_mtl.mtl` 覆盖文件（复制美术的材质名与参数，`map_Kd` 改成 `#ballast`、`#sleeper_side`…），再用 `rail_core.json` 的 `textures` 段把这些名字映射到美术目录里的原图。
+
+`mtl_override` 需要写完整的 ResourceLocation（带 `models/block/` 前缀和 `.mtl` 后缀），Forge 不会自动补。
 
 ## 模型原点与摆放
 
-`test.obj` 实测范围：
+`test.obj` 实测：X −0.801..0.801（纵向）、Y −1.000..0.750（轨面 0.750）、Z −2.141..2.141（横向）。
 
-| 轴 | 范围 | 含义 |
-| --- | --- | --- |
-| X | −0.801 .. 0.801 | 纵向（钢轨方向），约 1.6 格 |
-| Y | −1.000 .. 0.750 | 轨面 0.750，道砟底 −1.000 |
-| Z | −2.141 .. 2.141 | 横向，约 4.28 格 |
+```json
+"transform": { "translation": [-0.5, 0.5, 0.5] }
+```
 
-`rail_core.json` 里只写 `translation: [0, 0.625, 0]`，让轨面落在方块顶面 `y = 1.875`。Forge 不做坐标轴交换，南北朝向由 blockstate 的 `y: 0/90/180/270` 处理。
+- `[0, 0.5, 0]` 让模型原点与方块上表面中心重合；
+- `[-0.5, 0, 0.5]` 是额外微调。
 
 ## 占位与碰撞
 
-代码不缩放：占位、碰撞、铺设按 **1 格长 × 3 格宽** 计算，模型越界部分允许重叠。
-
-## 分组命名
-
-分组名以美术导出的 OBJ 为准，程序只读取、不改名。见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)。
+占位、碰撞、铺设按 **1 格长 × 3 格宽** 计算，模型越界部分允许重叠。

@@ -50,10 +50,9 @@ git clone --depth 1 --branch master https://github.com/TeamOpenIndustry/Immersiv
 
 ## 轨道美术加载
 
-`assets/vastseatrain/models/block/rail/` 是**纯美术目录，程序只读不写**。所有程序配置放在它外面（`models/block/rail_core.json` 等）。保护规则见 [`docs/art-assets-policy.md`](docs/art-assets-policy.md)，要点：
+`assets/vastseatrain/models/block/rail/` 是**纯美术目录，程序只读不写**；所有程序配置在它外面（`models/block/rail_core.json`、`models/block/rail_mtl.mtl`）。规则见 [`docs/art-assets-policy.md`](docs/art-assets-policy.md)，要点：
 
-- 不写 `mtl_override`，由 OBJ 自带的 `mtllib test.mtl` 相对解析同目录材质。
-- `map_Kd` 的相对文件名在 `rail_core.json` 的 `textures` 段映射到 `block/rail/xxx.png`。
-- 摆放只加一条 `translation: [0, 0.625, 0]`，让轨面落在方块顶面；南北朝向交给 blockstate 的 `y` 旋转。
+- 美术 MTL 的相对 `map_Kd` 会被 Forge 解析进 `minecraft:` 命名空间（紫黑棋盘格），因此程序用 `mtl_override` 指向自己的 `rail_mtl.mtl`，`map_Kd` 写 `#name`，再由 `rail_core.json` 的 `textures` 映射到美术原图。
+- 摆放只写一条 `translation: [-0.5, 0.5, 0.5]`：`[0,0.5,0]` 使模型原点与方块上表面中心重合，`[-0.5,0,0.5]` 为额外微调。
 - 占位、碰撞、铺设按 1 × 3 格计算，模型越界部分允许重叠。
 - 分组命名见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)。
