@@ -1,8 +1,8 @@
 {
   "variants": {
-    "facing=north": { "model": "vastseatrain:block/rail/test" },
-    "facing=east":  { "model": "vastseatrain:block/rail/test", "y": 270 },
-    "facing=south": { "model": "vastseatrain:block/rail/test", "y": 180 },
-    "facing=west":  { "model": "vastseatrain:block/rail/test", "y": 90 }
+    "facing=north": { "model": "vastseatrain:block/rail_core" },
+    "facing=east":  { "model": "vastseatrain:block/rail_core", "y": 270 },
+    "facing=south": { "model": "vastseatrain:block/rail_core", "y": 180 },
+    "facing=west":  { "model": "vastseatrain:block/rail_core", "y": 90 }
   }
 }

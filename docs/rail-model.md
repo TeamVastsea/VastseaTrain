@@ -1,64 +1,59 @@
 # 轨道美术加载
 
-轨道使用美术提供的 OBJ，**模型、材质、贴图原样放在同一目录，不做改动、不做搬迁**：
+轨道美术资源由美术直接放进 `assets/vastseatrain/models/block/rail/`，程序**只读、不写**。保护规则见 [`docs/art-assets-policy.md`](docs/art-assets-policy.md)。
+
+## 目录划分
 
 ```text
-assets/vastseatrain/models/block/rail/
-  test.obj           美术导出（顶点 / UV / 分组一律不动）
-  test.mtl           与 test.obj 并排，mtllib test.mtl 相对引用
-  gravel.png         ┐
-  concrete_silver.png│ MTL 里 map_Kd 用相对文件名，贴图与 MTL 同目录
-  1.png              │
-  2.png              │
-  3.png              ┘
-  test.json          唯一的程序配置：指定模型、材质，并按文件名映射贴图路径
+assets/vastseatrain/models/block/
+  rail/                     ← 纯美术资源，程序禁止写入
+    test.obj
+    test.mtl
+    gravel.png
+    concrete_silver.png
+    rail_sleeper_side.png
+    rail_sleeper_top.png
+    rail_fastener.png
+  rail_core.json            ← 程序配置：OBJ 加载、贴图映射、摆放变换
+  rail_slab_left.json
+  rail_slab_right.json
+  rail_slab.json
+  rail_filler.json
 ```
 
-## 模型原点约定（美术侧）
+## 程序如何兼容美术文件
 
-所有轨道模型共用同一个原点，导出时的实际几何：
+- 不写 `mtl_override`，交给 OBJ 自带的 `mtllib test.mtl` 相对解析。
+- `map_Kd rail_sleeper_top.png` 这类相对文件名会被 Forge 解析成 `vastseatrain:rail_sleeper_top.png`，所以 `rail_core.json` 的 `textures` 段逐个映射：
+
+```json
+"textures": {
+  "gravel": "vastseatrain:block/rail/gravel.png",
+  "concrete_silver": "vastseatrain:block/rail/concrete_silver.png",
+  "rail_sleeper_side": "vastseatrain:block/rail/rail_sleeper_side.png",
+  "rail_sleeper_top": "vastseatrain:block/rail/rail_sleeper_top.png",
+  "rail_fastener": "vastseatrain:block/rail/rail_fastener.png"
+}
+```
+
+美术新增贴图时，程序只在 `rail_core.json` 补一行映射。
+
+## 模型原点与摆放
+
+`test.obj` 实测范围：
 
 | 轴 | 范围 | 含义 |
 | --- | --- | --- |
-| X | −0.801 .. 0.801 | 纵向（钢轨方向），跨度约 1.6 格 |
-| Y | −1.000 .. 0.750 | 竖向；**轨面 0.750，道砟底 −1.000** |
-| Z | −2.141 .. 2.141 | 横向，跨度约 4.28 格 |
+| X | −0.801 .. 0.801 | 纵向（钢轨方向），约 1.6 格 |
+| Y | −1.000 .. 0.750 | 轨面 0.750，道砟底 −1.000 |
+| Z | −2.141 .. 2.141 | 横向，约 4.28 格 |
 
-竖向范围关于 `y = -0.125` 对称，所以原点并不是“方块上表面中心”，而是轨道段自身的几何中心。
-
-## 程序侧的对齐
-
-Forge 的 OBJ 加载器：
-
-- **不做任何坐标轴交换**，`transform.rotation` 的 X/Z 就是世界 X/Z；
-- 按方块**角点** `0..1` 应用变换（`transform.blockCenterToCorner()` 时以方块中心为基准）。
-
-因此 `test.json` 里的摆放只有一条 Y 向平移：
-
-```json
-"translation": [0, 0.625, 0]
-```
-
-它的作用是：把模型原点（`y = -0.125`，相对轨面）抬到世界 `y = 0.5`（方块几何中心），使**模型轨面落在方块顶面 `y = 1.0`**，道砟底落到 `y = -0.125`（埋进地面以下，看不见）。
-
-## 朝向
-
-模型本身是东西向的：钢轨沿 X、道砟横向铺开。南北朝向交给 blockstate 的 `y` 旋转：
-
-| facing | blockstate y |
-| --- | --- |
-| north | 0° |
-| east | 270° |
-| south | 180° |
-| west | 90° |
-
-`railslab` 与中心格使用同一份模型、同一套旋转（允许重叠）。
-
-## 材质
-
-- MTL 必须是**纯 ASCII**。Forge 按 ASCII 逐行读取，注释里出现中文会让整份材质库解析失败，全部变成紫黑棋盘格。
-- `test.json` 的 `textures` 段把 MTL 里的每个文件名映射到实际资源路径，例如 `"2": "vastseatrain:block/rail/2.png"`。美术新增贴图时，放同目录并在此补一行即可。
+`rail_core.json` 里只写 `translation: [0, 0.625, 0]`，让轨面落在方块顶面 `y = 1.875`。Forge 不做坐标轴交换，南北朝向由 blockstate 的 `y: 0/90/180/270` 处理。
 
 ## 占位与碰撞
 
-代码不缩放：占位、碰撞、铺设一律按 **1 格长 × 3 格宽** 计算，模型越界部分允许重叠。
+代码不缩放：占位、碰撞、铺设按 **1 格长 × 3 格宽** 计算，模型越界部分允许重叠。
+
+## 分组命名
+
+分组名以美术导出的 OBJ 为准，程序只读取、不改名。见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)。

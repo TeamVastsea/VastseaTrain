@@ -29,7 +29,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd 2.png
+map_Kd rail_sleeper_side.png
 
 newmtl Material_#83
 Ns 0.000000
@@ -39,7 +39,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd 1.png
+map_Kd rail_sleeper_top.png
 
 newmtl Material_#84
 Ns 0.000000
@@ -49,4 +49,4 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd 3.png
+map_Kd rail_fastener.png

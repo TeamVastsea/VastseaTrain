@@ -16,5 +16,6 @@
     "2": "vastseatrain:block/rail/2.png",
     "1": "vastseatrain:block/rail/1.png",
     "3": "vastseatrain:block/rail/3.png"
-  }
+  },
+  "visibility": {}
 }

@@ -50,11 +50,10 @@ git clone --depth 1 --branch master https://github.com/TeamOpenIndustry/Immersiv
 
 ## 轨道美术加载
 
-轨道使用美术提供的 OBJ，**模型、材质、贴图原样放在 `assets/vastseatrain/models/block/rail/` 同一目录**，MTL 用相对文件名引用贴图。完整规则见 [`docs/rail-model.md`](docs/rail-model.md)，要点：
+`assets/vastseatrain/models/block/rail/` 是**纯美术目录，程序只读不写**。所有程序配置放在它外面（`models/block/rail_core.json` 等）。保护规则见 [`docs/art-assets-policy.md`](docs/art-assets-policy.md)，要点：
 
-- 所有轨道模型共用同一原点，轨面 `y = 0.750`、道砟底 `y = -1.000`、纵向约 1.6 格、横向约 4.28 格。
-- Forge 不改坐标轴，程序只加一条 `translation: [0, 0.625, 0]`，让轨面落在方块顶面。
-- 南北朝向交给 blockstate 的 `y` 旋转。
-- MTL 必须纯 ASCII，否则整片紫黑。
-- 占位、碰撞、铺设按 1 × 3 格计算，越界部分允许重叠。
+- 不写 `mtl_override`，由 OBJ 自带的 `mtllib test.mtl` 相对解析同目录材质。
+- `map_Kd` 的相对文件名在 `rail_core.json` 的 `textures` 段映射到 `block/rail/xxx.png`。
+- 摆放只加一条 `translation: [0, 0.625, 0]`，让轨面落在方块顶面；南北朝向交给 blockstate 的 `y` 旋转。
+- 占位、碰撞、铺设按 1 × 3 格计算，模型越界部分允许重叠。
 - 分组命名见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)。
