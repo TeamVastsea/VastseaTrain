@@ -13,7 +13,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -75,30 +77,38 @@ public final class TrackPlacer {
     }
 
     /**
-     * 90° 弯道：沿弧线按 1 格间距摆放整份模型，每格一个 {@code rail_curve} 方块。
+     * 90° 弯道：沿弧线逐份摆放整份模型，每格一个 {@code rail_curve} 方块。
+     * <p>
+     * 一格可能叠多份模型（急弯处补缝），所以先按格子汇总，再一次性写进方块实体。
      */
     private static Component placeCurve(ServerLevel level, BlockPos origin, Direction dir,
                                         BlueprintSettings settings) {
         CurvePlan plan = CurvePlan.of(origin, dir, settings.curveLeft(), settings.curveRadius());
         List<CurvePlan.Piece> pieces = plan.pieces();
 
-        for (CurvePlan.Piece piece : pieces) {
-            Component failure = checkPlaceable(level, piece.pos());
+        for (BlockPos pos : plan.positions()) {
+            Component failure = checkPlaceable(level, pos);
             if (failure != null) {
                 return failure;
             }
         }
 
-        List<BlockPos> placed = new ArrayList<>(pieces.size());
+        Map<BlockPos, List<RailCurveBlockEntity.Entry>> byPos = new LinkedHashMap<>();
         for (CurvePlan.Piece piece : pieces) {
-            BlockPos pos = piece.pos();
+            byPos.computeIfAbsent(piece.pos(), key -> new ArrayList<>())
+                    .add(new RailCurveBlockEntity.Entry(
+                            (float) piece.angle(), (float) piece.originX(), (float) piece.originZ()));
+        }
+
+        List<BlockPos> placed = new ArrayList<>(byPos.size());
+        for (Map.Entry<BlockPos, List<RailCurveBlockEntity.Entry>> entry : byPos.entrySet()) {
+            BlockPos pos = entry.getKey();
             BlockState state = VTBlocks.RAIL_CURVE.get().defaultBlockState()
-                    .setValue(RailCurveBlock.FACING, piece.facing());
+                    .setValue(RailCurveBlock.FACING, plan.facingAt(pos));
             level.setBlock(pos, state, Block.UPDATE_ALL);
             BlockEntity entity = level.getBlockEntity(pos);
             if (entity instanceof RailCurveBlockEntity curve) {
-                curve.setPlacement(piece.angle(), piece.originX(), piece.originZ(), piece.radial(),
-                        plan.radius(), plan.left());
+                curve.setPlacement(entry.getValue(), plan.radius(), plan.left());
             }
             placed.add(pos);
         }

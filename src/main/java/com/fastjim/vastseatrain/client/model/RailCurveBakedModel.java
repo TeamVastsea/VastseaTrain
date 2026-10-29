@@ -1,6 +1,7 @@
 package com.fastjim.vastseatrain.client.model;
 
 import com.fastjim.vastseatrain.block.RailCurveBlockEntity;
+import com.fastjim.vastseatrain.block.RailCurveBlockEntity.Entry;
 import com.fastjim.vastseatrain.track.RailCurve;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
@@ -35,16 +36,17 @@ import java.util.List;
  * <h2>变换</h2>
  * 与直道相比，只是把模型原点挪到格内的指定位置，并绕 Y 轴转过切线角度：
  * <pre>
- *   x' = cos · (p.x − cX) − sin · (p.z − cZ) + cX + radial · cos
+ *   x' = cos · p.x − sin · p.z + originX
  *   y' = p.y + 0.5
- *   z' = sin · (p.x − cX) + cos · (p.z − cZ) + cZ + radial · sin
+ *   z' = sin · p.x + cos · p.z + originZ
  * </pre>
+ * 一格可能叠多份模型（急弯补缝），各自按自己的角度与原点变换。
  * 模型本身一个顶点都不改（满长度、满宽度），所以钢轨不会被切断；
  * 相邻条带在弯道内侧自然重叠、外侧的间隙由 3 格宽的道床盖住。
  */
 public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
-    /** 每个弯道格的摆放参数。 */
-    public static final ModelProperty<RailCurve.Transform> TRANSFORM = new ModelProperty<>();
+    /** 每个弯道格里的模型列表。 */
+    public static final ModelProperty<List<Entry>> STRIPS = new ModelProperty<>();
 
     private final Vector3f origin;
     private final List<RailObjGeometry.Face> faces;
@@ -69,7 +71,10 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
     public ModelData getModelData(@NotNull BlockAndTintGetter level, @NotNull BlockPos pos,
                                   @NotNull BlockState state, @NotNull ModelData modelData) {
         if (level.getBlockEntity(pos) instanceof RailCurveBlockEntity curve) {
-            return ModelData.builder().with(TRANSFORM, curve.transform()).build();
+            List<Entry> strips = curve.entries();
+            if (!strips.isEmpty()) {
+                return ModelData.builder().with(STRIPS, strips).build();
+            }
         }
         return modelData;
     }
@@ -86,15 +91,18 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         if (side != null) {
             return List.of();
         }
-        RailCurve.Transform transform = data.get(TRANSFORM);
-        if (transform == null) {
+        List<Entry> strips = data.get(STRIPS);
+        if (strips == null || strips.isEmpty()) {
             return List.of();
         }
-        List<BakedQuad> quads = new ArrayList<>(faces.size());
-        for (RailObjGeometry.Face face : faces) {
-            BakedQuad quad = build(face, transform);
-            if (quad != null) {
-                quads.add(quad);
+        List<BakedQuad> quads = new ArrayList<>(faces.size() * strips.size());
+        for (Entry strip : strips) {
+            RailCurve.Transform transform = strip.transform();
+            for (RailObjGeometry.Face face : faces) {
+                BakedQuad quad = build(face, transform);
+                if (quad != null) {
+                    quads.add(quad);
+                }
             }
         }
         return quads;
@@ -113,16 +121,15 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         float[] zs = new float[count];
         float cos = transform.cos();
         float sin = transform.sin();
-        float centerX = transform.centerX();
-        float centerZ = transform.centerZ();
-        float radial = transform.radial();
+        float originX = transform.originX();
+        float originZ = transform.originZ();
         for (int i = 0; i < count; i++) {
-            float x = p[i * 3] + origin.x() - centerX;
+            float x = p[i * 3] + origin.x();
             float y = p[i * 3 + 1] + origin.y();
-            float z = p[i * 3 + 2] + origin.z() - centerZ;
-            xs[i] = cos * x - sin * z + centerX + radial * cos;
+            float z = p[i * 3 + 2] + origin.z();
+            xs[i] = cos * x - sin * z + originX;
             ys[i] = y;
-            zs[i] = sin * x + cos * z + centerZ + radial * sin;
+            zs[i] = sin * x + cos * z + originZ;
         }
         // 法线由旋转后的顶点重新算，面朝向（Direction）也跟着旋转，明暗才对得上
         float nx = (ys[1] - ys[0]) * (zs[2] - zs[0]) - (zs[1] - zs[0]) * (ys[2] - ys[0]);

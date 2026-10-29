@@ -172,31 +172,19 @@ public final class RailCurve {
         return new Frame(radius, start, entry, left);
     }
 
-    /**
-     * 一个弯道方块里那份模型的摆放：绕<b>方块中心</b>的 Y 轴旋转角（余弦/正弦）、
-     * 旋转中心在格内的偏移，以及模型原点的径向与切向微调（用于把钢轨精确贴到弯曲的弧线上）。
-     * <p>
-     * 渲染公式（方块局部坐标，{@code p} 是模型原始顶点，已去掉原点垂直居中），
-     * 先把 {@code (a, b)} 当作以 {@code (cx, cz)} 为中心的长度轴 / 宽度轴分量做旋转变换：
-     * <pre>
-     *   a' = cos · a − sin · b
-     *   b' = sin · a + cos · b
-     *   x' = cx + a' + radial · cos
-     *   z' = cz + b' + radial · sin
-     * </pre>
-     * {@code radial} 是沿该格切线法线方向的微调（负值朝圆心），让模型钢轨正好落在
-     * “以圆心为中心、半径 {@code R ± 0.645}”的圆弧上；一条弯道内 {@code radial} 取值固定，
-     * 只在进入弯道处做一次过渡，因此相邻格不会错位。
-     */
-    public record Transform(float cos, float sin, float centerX, float centerZ, float radial) {
-        /** 模型原点在该格里的水平位置（方块局部坐标，0..1）。 */
-        public float originX() {
-            return centerX + radial * cos;
-        }
+    /** 一块道床覆盖的弧长（格）。模型沿长度方向的半长 0.801+，所以接缝余量按 0.8 算。 */
+    public static final double STRIP_HALF_LENGTH = 0.8D;
 
-        /** 模型原点在该格里的水平位置（方块局部坐标，0..1）。 */
-        public float originZ() {
-            return centerZ + radial * sin;
-        }
+    /**
+     * 一份模型的摆放：绕 Y 轴旋转角的余弦/正弦，以及模型原点在方块局部坐标里的位置。
+     * <p>
+     * 渲染公式（{@code p} 是模型原始顶点，原点垂直居中）：
+     * <pre>
+     *   x' = cos · p.x − sin · p.z + originX
+     *   y' = p.y + 0.5
+     *   z' = sin · p.x + cos · p.z + originZ
+     * </pre>
+     */
+    public record Transform(float cos, float sin, float originX, float originZ) {
     }
 }
