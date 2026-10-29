@@ -11,7 +11,6 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
@@ -28,13 +27,17 @@ public class RailBlock extends HorizontalDirectionalBlock {
     public static final int LENGTH_BLOCKS = 1;
     /** 一段轨道在平面上的宽度（格），以本方块为中心向两侧各延伸 1 格。 */
     public static final int WIDTH_BLOCKS = 3;
-    /** 碰撞箱高度：方块顶面上方 1/16。 */
-    private static final double HEIGHT = 1.0D;
-    /** 半宽：3 格宽围绕中心格，边界为 ±1.5。 */
-    private static final double HALF = WIDTH_BLOCKS / 2.0D;
-    /** 碰撞箱沿轨道方向占据本格满长。 */
-    private static final VoxelShape CONTACT_X = Block.box(0.0D, 0.0D, -16.0D, 16.0D, HEIGHT, 32.0D);
-    private static final VoxelShape CONTACT_Z = Block.box(-16.0D, 0.0D, 0.0D, 32.0D, HEIGHT, 16.0D);
+    /**
+     * 形状顶面在“方块坐标”下的高度。
+     * <p>
+     * {@link Block#box} 不会把越界坐标夹回 0..16，但方块形状在网格对齐时会被当作平面处理：
+     * 高度的几分之几决定它能否与邻居拼成整面。用整数 1 格，轨道格才会被当作完整的实心方块
+     * 参与天空光衰减与面剔除，从而在地面上投出阴影。
+     */
+    private static final double BED_HEIGHT = 2.0D;
+    /** 3 格宽的形状：南北朝向时沿 X 铺开，东西朝向时沿 Z 铺开。 */
+    private static final VoxelShape SHAPE_X = Block.box(0.0D, 0.0D, -16.0D, 16.0D, BED_HEIGHT, 32.0D);
+    private static final VoxelShape SHAPE_Z = Block.box(-16.0D, 0.0D, 0.0D, 32.0D, BED_HEIGHT, 16.0D);
 
     public RailBlock(Properties properties) {
         super(properties);
@@ -52,19 +55,45 @@ public class RailBlock extends HorizontalDirectionalBlock {
     }
 
     /**
-     * 3 格宽的接触面：南北朝向时沿 X 方向铺开，东西朝向时沿 Z 方向铺开。
-     * 形状允许越出本方块边界，这是“一个方块承载 3 格宽轨道”的必要做法。
+     * 方块形状：用于遮挡天空光、下落阴影与实体碰撞采样。
+     * <p>
+     * 轨道模型本身很低（道床 + 钢轨），但形状必须返回“整格实心”，而不能是低矮形状：
+     * Minecraft 只在形状为整格时把该格视为不透明方块，参与天空光衰减与相邻面剔除。
+     * 返回低矮形状时，这一格对光照完全透明，轨道就永远投不出阴影。
+     * <p>
+     * 返回 3 格宽的超格形状（南北向沿 X 铺开、东西向沿 Z 铺开），与模型观感一致。
      */
     @Override
-    public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         Direction facing = state.getValue(FACING);
         boolean alongZ = facing.getAxis() == Direction.Axis.Z;
-        return alongZ ? CONTACT_Z : CONTACT_X;
+        return alongZ ? SHAPE_Z : SHAPE_X;
     }
 
+    /** 3 格宽的接触面：南北朝向时沿 X 方向铺开，东西朝向时沿 Z 方向铺开。 */
+    @Override
+    public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return getShape(state, level, pos, context);
+    }
+
+    /**
+     * 视觉形状与碰撞箱一致。
+     */
     @Override
     public VoxelShape getVisualShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return Shapes.block();
+        return getShape(state, level, pos, context);
+    }
+
+    /**
+     * 是否遮挡天空光。
+     * <p>
+     * 原版默认实现依赖“形状是否整格”的缓存判断，形状稍有差池就会让整格对光照透明。
+     * 这里直接返回 {@code true}：轨道格不向下透光，下方与相邻方块才会出现阴影和明暗过渡。
+     * 轨道模型本身不封顶，但游戏阴影来自方块光照而非模型，所以这样不会让画面变黑。
+     */
+    @Override
+    public boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
+        return false;
     }
 
     @Override
