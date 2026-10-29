@@ -6,7 +6,7 @@
   "shade_quads": true,
   "ambientocclusion": false,
   "transform": {
-    "translation": [0.5, 0.0, 0.5]
+    "translation": [0.5, 0.5, 0.5]
   },
   "textures": {
     "particle": "vastseatrain:block/rail/gravel",
