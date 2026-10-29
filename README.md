@@ -54,7 +54,8 @@ git clone --depth 1 --branch master https://github.com/TeamOpenIndustry/Immersiv
 
 - 模型约定：前进方向 -X、横向（Z）3 格、纵向 1 格，原点在方块上表面中心，轨顶 `y = 0.75`，道床向下延伸到方块下方被地面遮住。
 - 把模型摆进方块坐标系只写在 `models/block/rail/test.json` 的 `transform` 里（绕方块中心旋转 90°），方块状态和代码里都没有朝向属性；要换朝向只改这一条 `rotation`。
-- 两侧补位格用 `test_bed.json`（只保留道床，隐藏 `RAIL_BASE_b1_2` 与钢轨分组），左右各自平移一格：`rail_slab_left.json` 平移 `+1`，`rail_slab_right.json` 平移 `-1`，拼起来与中心格的完整模型对齐。
+- 两侧补位格用 `test_bed.json`（只保留道砟，隐藏 `rail_left_rail` 与 `rail_right_rail`），左右各自平移一格：`rail_slab_left.json` 平移 `+1`，`rail_slab_right.json` 平移 `-1`，拼起来与中心格的完整模型对齐。
+- 分组命名见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)：道砟 `rail_full_ballast`、轨枕 `rail_center_sleeper`、扣件 `rail_center_fastener`、钢轨 `rail_left_rail` / `rail_right_rail`。
 - 材质：`test.mtl` 沿用美术的材质参数，只把 `map_Kd` 改成带命名空间的资源路径。**Forge 的 OBJ 加载器只认 `[a-z_-]` 组成的贴图名**（`UnbakedGeometryHelper.FILESYSTEM_PATH_TO_RESLOC`），文件名带数字或未标命名空间都会解析成紫黑棋盘格，所以贴图统一用字母命名：`gravel`、`concrete_silver`、`rail_sleeper_top`、`rail_sleeper_side`、`rail_fastener`。
 - 模型文件引入全新放在 `rail/` 下（`test.json` 用 `mtl_override` 指向 `test.mtl`），不会被 Forge 当成方块模型预加载。
 

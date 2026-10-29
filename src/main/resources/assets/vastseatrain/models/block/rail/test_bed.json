@@ -7,9 +7,8 @@
   "shade_quads": true,
   "emissive_ambient": false,
   "visibility": {
-    "RAIL_BASE_b1_2": false,
-    "RAIL_LEFT_b": false,
-    "RAIL_RIGHT_b": false
+    "rail_left_rail": false,
+    "rail_right_rail": false
   },
   "transform": {
     "origin": "center",
