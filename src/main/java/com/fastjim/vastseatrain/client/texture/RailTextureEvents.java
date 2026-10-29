@@ -21,9 +21,10 @@ public final class RailTextureEvents {
 
     @SubscribeEvent
     public static void registerSpriteLoaders(RegisterTextureAtlasSpriteLoadersEvent event) {
-        // Forge 只提供 register(String, loader)，内部用 ResourceLocation 解析
-        event.register(RailTextureLoader.ID.toString(), RailTextureLoader.INSTANCE);
-        VastseaTrain.LOGGER.info("已注册美术贴图加载器 {}", RailTextureLoader.ID);
+        // Forge 的 register(String, loader) 内部是 new ResourceLocation(当前模组命名空间, name)，
+        // 会自动补上 "vastseatrain:"。所以这里只能传 path（"rail_art"）；
+        // 传 "vastseatrain:rail_art" 会拼成 "vastseatrain:vastseatrain:rail_art" 直接崩游戏。
+        event.register(RailTextureLoader.ID.getPath(), RailTextureLoader.INSTANCE);
     }
 
     @SubscribeEvent

@@ -94,7 +94,7 @@ public final class RailArtProbe {
         System.out.println();
         System.out.println("=== 汇总：解码成功 " + ok + " 张，失败 " + failed + " 张 ===");
 
-        checkTextures(textures);
+        checkTextures(art, textures);
     }
 
     /** 最近邻缩放（SimpleGraphics2D 不做插值，保证逐像素取样）。 */
@@ -144,7 +144,7 @@ public final class RailArtProbe {
     }
 
     /** 检查贴图目录：占位 PNG 是否有同名 .mcmeta，以及 .mcmeta 里的 loader 是否指向本模组。 */
-    private static void checkTextures(Path textures) throws Exception {
+    private static void checkTextures(Path artRoot, Path textures) throws Exception {
         System.out.println();
         System.out.println("=== 图集侧检查（" + textures + "） ===");
         if (!Files.isDirectory(textures)) {
@@ -180,6 +180,24 @@ public final class RailArtProbe {
             }
             System.out.printf(Locale.ROOT, "  %-24s 占位 %dx%d  loader=%-20s %s%n",
                     name, size[0], size[1], loader, ok ? "OK" : "!!");
+            // 放大后的图集 UV 只认占位图尺寸：占位图必须和美术图的宽高比一致，
+            // 否则美术图会被拉变形/被裁掉（rail_sleeper_top 就是 128x128 的高清图）
+            Path source = null;
+            for (String extension : EXTENSIONS) {
+                Path candidate = Path.of(artRoot.toString(), name + "." + extension);
+                if (Files.isRegularFile(candidate)) {
+                    source = candidate;
+                    break;
+                }
+            }
+            if (source != null) {
+                int[] artSize = imageSize(Files.readAllBytes(source));
+                boolean sameAspect = artSize[0] > 0 && artSize[1] > 0 && size[0] > 0 && size[1] > 0
+                        && (long) artSize[0] * size[1] == (long) artSize[1] * size[0];
+                System.out.printf(Locale.ROOT, "  %-24s 美术 %dx%d ← %s  %s%n", "",
+                        artSize[0], artSize[1], source.getFileName(), sameAspect ? "宽高比一致 OK" : "!! 宽高比不一致");
+            }
+
         }
     }
 
@@ -197,6 +215,20 @@ public final class RailArtProbe {
         int first = json.indexOf('"', colon + 1);
         int second = first < 0 ? -1 : json.indexOf('"', first + 1);
         return first < 0 || second < 0 ? null : json.substring(first + 1, second);
+    }
+
+    /** 图片尺寸：PNG 直接读 IHDR，JPEG 用 ImageIO（美术目录里两种格式都有）。 */
+    private static int[] imageSize(byte[] bytes) throws Exception {
+        if (bytes.length > 2 && (bytes[0] & 0xFF) == 0xFF && (bytes[1] & 0xFF) == 0xD8) {
+            try (InputStream in = new java.io.ByteArrayInputStream(bytes)) {
+                BufferedImage image = ImageIO.read(in);
+                if (image != null) {
+                    return new int[]{image.getWidth(), image.getHeight()};
+                }
+            }
+            return new int[]{0, 0};
+        }
+        return pngSize(bytes);
     }
 
     private static int[] pngSize(byte[] bytes) {

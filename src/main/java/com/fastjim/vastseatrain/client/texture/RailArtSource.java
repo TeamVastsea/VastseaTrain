@@ -119,8 +119,7 @@ public final class RailArtSource {
      *
      * @throws IOException 读不到或解不开图片
      */
-    public static BufferedImage decodeAndScale(ResourceManager manager, ResourceLocation source,
-                                               int width, int height) throws IOException {
+    public static BufferedImage decode(ResourceManager manager, ResourceLocation source) throws IOException {
         BufferedImage decoded;
         Resource resource = manager.getResourceOrThrow(source);
         try (InputStream in = resource.open()) {
@@ -129,7 +128,17 @@ public final class RailArtSource {
         if (decoded == null) {
             throw new IOException("无法解码（不受支持的图片格式？）：" + source);
         }
-        return scale(decoded, width, height);
+        return decoded;
+    }
+
+    /**
+     * 解码美术图片并缩放到指定尺寸，返回 ARGB 图。
+     *
+     * @throws IOException 读不到或解不开图片
+     */
+    public static BufferedImage decodeAndScale(ResourceManager manager, ResourceLocation source,
+                                               int width, int height) throws IOException {
+        return scale(decode(manager, source), width, height);
     }
 
     /** 把任意图片缩放到 width×height 的 ARGB 图（尺寸相同则只转颜色类型，不重采样）。 */

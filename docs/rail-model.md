@@ -26,6 +26,18 @@ assets/vastseatrain/textures/block/rail/
 贴图名与 UV 全都不变。所以美术只改 `rail/` 目录 + 按 F3+T 即可。
 注意 Forge 只按 `.mcmeta` 选择加载器（不按贴图名匹配），新增贴图时要补一个同尺寸的 `.png` 与 `.png.mcmeta`。
 
+### 加载器的两个硬性约束
+
+- **注册名只写 path**：`RegisterTextureAtlasSpriteLoadersEvent#register(String, loader)` 内部是
+  `new ResourceLocation(当前模组命名空间, name)`，会自己补上 `vastseatrain:`。
+  因此只能传 `"rail_art"`；传 `"vastseatrain:rail_art"` 会拼成
+  `vastseatrain:vastseatrain:rail_art`，启动时直接抛 `ResourceLocationException` 崩游戏。
+- **占位 PNG 的宽高比必须和美术图一致**：`.mcmeta` 里只有 `animation.width/height`（帧尺寸），
+  加载器把美术图缩放到占位图的**整张**尺寸，图集 UV 也只认这个尺寸。
+  比如 `rail_sleeper_top` 美术图是 128×128，占位图与 `.mcmeta` 也都是 128×128；
+  若占位图是 16×16 而 `.mcmeta` 写 16×16，美术图会被压扁。
+  `src/test/.../RailArtProbe` 会把“占位尺寸 / 美术尺寸 / 宽高比”逐张列出来。
+
 美术 MTL 里的 `map_Kd` 是相对文件名，直接交给加载器会被解析成 `minecraft:` 命名空间，
 所以每套外观都在程序侧配一份 `*_mtl.mtl`，把 `map_Kd` 换成 `#名称`，再由根模型的
 `textures` 块指到 `vastseatrain:block/rail/...`。
