@@ -1,0 +1,9 @@
+{
+  "animation": {
+    "width": 128,
+    "height": 128
+  },
+  "forge": {
+    "loader": "vastseatrain:rail_art"
+  }
+}

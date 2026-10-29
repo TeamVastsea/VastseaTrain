@@ -101,7 +101,7 @@ public final class TrackPlacer {
         for (CurvePlan.Piece piece : pieces) {
             byPos.computeIfAbsent(piece.pos(), key -> new ArrayList<>())
                     .add(new RailCurveBlockEntity.Entry(
-                            (float) piece.angle(), (float) piece.originX(), (float) piece.originZ()));
+                            (float) piece.angle(), (float) piece.offsetX(), (float) piece.offsetZ()));
         }
 
         List<BlockPos> placed = new ArrayList<>(byPos.size());

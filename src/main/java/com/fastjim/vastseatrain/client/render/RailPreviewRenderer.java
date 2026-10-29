@@ -72,7 +72,7 @@ public final class RailPreviewRenderer {
         public double pitch = 26.0D;
         /** 缩放倍数，1 为默认距离。 */
         public double zoom = 1.0D;
-        /** 平移（格，屏幕方向）：右移 +u、屏幕上移 +v。 */
+        /** 平移（格，垂直屏幕方向）：模型沿屏幕右方偏移 +panU、沿屏幕上方偏移 +panV。 */
         public double panU;
         public double panV;
         /** 观察目标（格）。 */
@@ -100,11 +100,34 @@ public final class RailPreviewRenderer {
             zoom = Mth.clamp(zoom * Math.pow(0.85D, scroll), 0.25D, 6.0D);
         }
 
-        /** 右键拖拽：平移（按当前缩放换算成格，拖动距离与视觉缩放一致）。 */
+        /**
+         * 右键拖拽：平移模型，方向与鼠标拖动一致（向右拖 → 模型向右走，向下拖 → 模型向下走）。
+         * <p>
+         * 投影里屏幕 Y 轴向下、模型局部 Y 轴向上，而且屏幕上方还混着水平轴的旋转分量，
+         * 所以按“屏幕右 / 屏幕上”两个方向的逆变换求模型位移，而不是只改一个分量。
+         * 这样任何俯仰角、任何朝向拖起来都跟手。
+         */
         public void dragPan(double dx, double dy) {
-            double perPixel = 2.0D * DISTANCE / Math.max(1, y1 - y0) * zoom;
-            panU -= dx * perPixel;
-            panV += dy * perPixel;
+            double perPixel = scale();
+            // 屏幕位移（像素）→ 相机空间位移（格外形：右为正、上为正）
+            double screenRight = dx * perPixel;
+            double screenUp = -dy * perPixel;
+            double yawRad = StrictMath.toRadians(yaw);
+            double pitchRad = StrictMath.toRadians(pitch);
+            // 相机空间 (右, 上, 前) 是模型空间向量绕 Y 转 yaw、再绕 X 转 pitch 的结果；
+            // 这里只取“右”与“上”两个轴，反变换回模型空间 (x, y, z)
+            double upX = 0.0D;
+            double upY = Math.cos(pitchRad);
+            double upZ = -Math.sin(pitchRad);
+            double rightX = Math.cos(yawRad);
+            double rightY = 0.0D;
+            double rightZ = -Math.sin(yawRad);
+            double wx = rightX * screenRight + upX * screenUp;
+            double wy = rightY * screenRight + upY * screenUp;
+            double wz = rightZ * screenRight + upZ * screenUp;
+            // 投影里模型位置用的是 (p - target + pan)：要让模型沿 w 移动，pan 要反着加
+            panU -= wx;
+            panV -= wy;
         }
 
         /** 复位到默认视角。 */
@@ -116,12 +139,28 @@ public final class RailPreviewRenderer {
             panV = 0.0D;
         }
 
-        /** 屏幕宽度对应的格数换算：1 像素 = 多少格（用于鼠标拖拽的视觉一致）。 */
-        private double perPixel() {
-            return 2.0D * BASE_DISTANCE / Math.max(1, y1 - y0) * zoom;
+        /** 1 像素在“模型局部坐标”里对应多少格（与投影用的焦距一致）。 */
+        private double scale() {
+            double height = Math.max(1, y1 - y0);
+            double perPixel = 2.0D * DISTANCE * zoom / height * StrictMath.tan(StrictMath.toRadians(FOV) * 0.5D);
+            // 再按显示倍数校正：屏幕像素不是设计单位时，鼠标移动的像素数才是真实观感
+            return perPixel / displayScale;
         }
 
-        /** 相机位置（模型局部坐标）：按当前的旋转、缩放与平移，从目标点退到 DISTANCE·zoom 处。 */
+        /** 画到屏幕上的额外缩放（帧缓冲像素 / 设计单位），用来让拖拽距离贴合真实鼠标位移。 */
+        private double displayScale = 1.0D;
+
+        /** 设置画到屏幕上的额外缩放。 */
+        public void setDisplayScale(double displayScale) {
+            this.displayScale = displayScale <= 0.0D ? 1.0D : displayScale;
+        }
+
+        /** 当前显示比例（1 像素对应多少设计单位）。 */
+        public double displayScale() {
+            return displayScale;
+        }
+
+        /** 相机位置（模型局部坐标）：按当前的旋转、缩放与平移，从“平移后的目标点”退到 DISTANCE·zoom 处。 */
         public Vec3 eye() {
             double yawRad = StrictMath.toRadians(yaw);
             double pitchRad = StrictMath.toRadians(pitch);
@@ -131,6 +170,7 @@ public final class RailPreviewRenderer {
             double cy = -back * Math.sin(pitchRad);
             double dx = -cz * Math.sin(yawRad);
             double dz = cz * Math.cos(yawRad);
+            // 平移后模型实际所在的位置是 (target - pan)，相机跟着它走
             return new Vec3(target.x - panU + dx, target.y - panV + cy, target.z + dz);
         }
 
@@ -172,18 +212,6 @@ public final class RailPreviewRenderer {
             double sy = (y0 + y1) * 0.5D - cy * focal / depth;
             return new double[]{sx, sy, depth};
         }
-
-        /** 把屏幕像素位移换算成模型平移（格），保持“拖拽跟手”的观感。 */
-        public double[] pixelsToModel(double dx, double dy) {
-            double yawRad = StrictMath.toRadians(yaw);
-            // 世界移动 = 反旋转(屏幕右移, 屏幕上移)
-            double right = -dx * perPixel();
-            double up = dy * perPixel();
-            // 屏幕上移大致对应模型沿“远离相机的水平方向 + 竖直方向”，这里用水平分量近似，观感足够
-            double wx = right * Math.cos(yawRad);
-            double wz = -right * Math.sin(yawRad);
-            return new double[]{wx, up, wz};
-        }
     }
 
     // ------------------------------------------------------------------ 绘制
@@ -197,6 +225,10 @@ public final class RailPreviewRenderer {
      * @param tint    整体色调（选中高亮时为 1.05，否则 1.0）
      */
     public static void draw(GuiGraphics graphics, List<Face> faces, List<Face> floor, Camera camera, float tint) {
+        // 先把视图推到视口左下角：之后所有投影坐标都相对视口计算，视口在窗口里挪动也不会错位
+        PoseStack pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(camera.x0, camera.y0, 0.0F);
         List<Projected> projected = new ArrayList<>(faces.size() + floor.size());
         for (Face face : faces) {
             Projected p = project(camera, face);
@@ -211,6 +243,7 @@ public final class RailPreviewRenderer {
             }
         }
         if (projected.isEmpty()) {
+            pose.popPose();
             return;
         }
         // 画家算法：远的先画。轨道是一堆小面片（钢轨、枕木、道床），按深度排序足够正确
@@ -231,6 +264,7 @@ public final class RailPreviewRenderer {
             colors.add(color(face.tint(), shade(n), tint));
         }
         if (visible.isEmpty()) {
+            pose.popPose();
             return;
         }
 
@@ -242,6 +276,8 @@ public final class RailPreviewRenderer {
         RenderSystem.setShaderTexture(0, net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
+        // 屏幕坐标在这里是<b>设计单位</b>（调用方已经把界面缩放放进 pose 里）。
+        // 顶点直接贴着近平面写：投影得到的 z 用不上，反而会因为在 1 附近被裁掉或与背景抢深度。
         Matrix4f matrix = graphics.pose().last().pose();
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder buffer = tesselator.getBuilder();
@@ -265,6 +301,7 @@ public final class RailPreviewRenderer {
         RenderSystem.enableCull();
         RenderSystem.enableDepthTest();
         RenderSystem.disableBlend();
+        pose.popPose();
     }
 
     private static Projected project(Camera camera, Face face) {
@@ -288,6 +325,11 @@ public final class RailPreviewRenderer {
             cx += face.x()[i];
             cy += face.y()[i];
             cz += face.z()[i];
+        }
+        // 投影坐标是“视口内坐标”；画的时候视图已经平移到视口左下角，这里换回相对视口的值
+        for (int i = 0; i < 3; i++) {
+            sx[i] -= camera.x0;
+            sy[i] -= camera.y0;
         }
         return new Projected(face, sx, sy, depth / 3.0D, cx / 3.0D, cy / 3.0D, cz / 3.0D);
     }

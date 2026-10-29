@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
@@ -55,33 +56,48 @@ public class RailBlock extends HorizontalDirectionalBlock {
     }
 
     /**
-     * 方块形状：用于遮挡天空光、下落阴影与实体碰撞采样。
+     * 方块形状：用于选择框与实体的形状查询。
      * <p>
-     * 轨道模型本身很低（道床 + 钢轨），但形状必须返回“整格实心”，而不能是低矮形状：
-     * Minecraft 只在形状为整格时把该格视为不透明方块，参与天空光衰减与相邻面剔除。
-     * 返回低矮形状时，这一格对光照完全透明，轨道就永远投不出阴影。
-     * <p>
-     * 返回 3 格宽的超格形状（南北向沿 X 铺开、东西向沿 Z 铺开），与模型观感一致。
+     * {@code getShape} <b>不能</b>返回超格形状：Minecraft 会把它当作整格遮挡形状参与相邻方块的面剔除，
+     * 返回“3 格宽”的形状后，周围一圈格子的顶面会被当成被遮住而删掉，看起来就是地面破面/穿模。
+     * 轨道格在网格上就按整格处理，遮挡与剔除全部交给原版的整格逻辑；只有碰撞箱保留 3 格宽。
      */
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        Direction facing = state.getValue(FACING);
-        boolean alongZ = facing.getAxis() == Direction.Axis.Z;
-        return alongZ ? SHAPE_Z : SHAPE_X;
+        return Shapes.block();
     }
 
     /** 3 格宽的接触面：南北朝向时沿 X 方向铺开，东西朝向时沿 Z 方向铺开。 */
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return getShape(state, level, pos, context);
+        Direction facing = state.getValue(FACING);
+        boolean alongZ = facing.getAxis() == Direction.Axis.Z;
+        return alongZ ? SHAPE_Z : SHAPE_X;
     }
 
     /**
-     * 视觉形状与碰撞箱一致。
+     * 视觉形状：只用于阴影与部分渲染判定，返回整格，避免超格形状把相邻方块的剔除搞乱。
      */
     @Override
     public VoxelShape getVisualShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return getShape(state, level, pos, context);
+        return Shapes.block();
+    }
+
+    /**
+     * 遮挡形状：返回空形状。
+     * <p>
+     * 轨道模型不是整格实心方块，若让它遮挡相邻方块的面，紧贴轨道的方块顶面会被剃掉，
+     * 在轨道与地面交界处出现缺口（游戏里看起来像“陷进地面”）。返回空形状后原版照常画地面。
+     */
+    @Override
+    public VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
+        return Shapes.empty();
+    }
+
+    /** 轨道格透明，不开启 AO：AO 会把整格当成不透明方块，在轨道周围压出一圈黑边。 */
+    @Override
+    public boolean useShapeForLightOcclusion(BlockState state) {
+        return false;
     }
 
     /**

@@ -50,9 +50,31 @@ public final class RailCurve {
         };
     }
 
-    /** 弯心方向（左弯取左侧、右弯取右侧）。 */
+    /**
+     * 弯心方向（左弯取左侧、右弯取右侧）。
+     * <p>
+     * 用坐标旋转而不是 {@code getClockWise}/{@code getCounterClockWise}：这两个方法在 1.20.1 里
+     * 名字与方向相反，按名字用会左右颠倒。
+     */
     public static Direction inward(Direction entry, boolean left) {
-        return left ? entry.getCounterClockWise() : entry.getClockWise();
+        double ex = directionX(entry);
+        double ez = directionZ(entry);
+        // 左转 = 逆时针：世界坐标里 (x, z) 旋转 +90° 得到 (-z, x)
+        return left ? directionOf(-ez, ex) : directionOf(ez, -ex);
+    }
+
+    /**
+     * 弧长处的“世界朝向”（模型局部 −X 的 90° 近似方向）。
+     * <p>
+     * 入口处一定等于 {@code entry}；之后按左右转逐段变化，出口处等于 {@link #exit}。
+     * 不能用 {@code getClockWise} / {@code getCounterClockWise}：它们在 1.20.1 里名字与方向相反，
+     * 按名字判断会把左弯画成右弯。这里用切线在入口方向上的分量判断“转向了多少”，不依赖命名。
+     */
+    private static Direction directionOf(double x, double z) {
+        if (Math.abs(x) >= Math.abs(z)) {
+            return x >= 0 ? Direction.EAST : Direction.WEST;
+        }
+        return z >= 0 ? Direction.SOUTH : Direction.NORTH;
     }
 
     /** 出口前进方向（绕完 90° 后正好朝弯心方向）。 */
@@ -119,6 +141,16 @@ public final class RailCurve {
         public double tangentZ(double s) {
             double t = s / radius;
             return -uz * Math.sin(t) + vz * Math.cos(t);
+        }
+
+        /**
+         * 弧长处的“世界朝向”（模型局部 −X 的 90° 近似方向）。
+         * <p>
+         * 入口处一定等于 {@code entry}，出口处一定等于 {@link #exit}；中间取最接近的 4 个朝向之一。
+         * 直接用切线方向的符号判断，不依赖 {@code getClockWise} 之类的命名（1.20.1 里它们名字与方向相反）。
+         */
+        public Direction heading(double s) {
+            return directionOf(tangentX(s), tangentZ(s));
         }
 
         /**

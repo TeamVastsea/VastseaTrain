@@ -4,9 +4,9 @@
   "mtl_override": "vastseatrain:models/block/rail_slab_mtl.mtl",
   "flip_v": false,
   "shade_quads": true,
-  "ambientocclusion": false,
+  "ambientocclusion": true,
   "transform": {
-    "translation": [0.5, 0.5, 0.5]
+    "translation": [0.5, 0.0, 0.5]
   },
   "textures": {
     "particle": "vastseatrain:block/rail/medium2",
