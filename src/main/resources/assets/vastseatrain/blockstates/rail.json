@@ -1,8 +1,5 @@
 {
   "variants": {
-    "facing=east":  { "model": "vastseatrain:block/rail_core" },
-    "facing=south": { "model": "vastseatrain:block/rail_core" },
-    "facing=west":  { "model": "vastseatrain:block/rail_core" },
-    "facing=north": { "model": "vastseatrain:block/rail_core" }
+    "": { "model": "vastseatrain:block/rail_core" }
   }
 }

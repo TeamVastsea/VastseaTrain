@@ -1,12 +1,20 @@
 {
   "loader": "forge:obj",
   "model": "vastseatrain:models/block/rail/test.obj",
+  "mtl_override": "vastseatrain:models/block/rail/test.mtl",
   "flip_v": true,
-  "automatic_culling": false,
+  "automatic_culling": true,
   "shade_quads": true,
   "emissive_ambient": false,
   "visibility": {
+    "RAIL_BASE_b1_2": false,
     "RAIL_LEFT_b": false,
     "RAIL_RIGHT_b": false
+  },
+  "transform": {
+    "origin": "center",
+    "translation": [0, 0, 0],
+    "rotation": [0, 90, 0],
+    "scale": 1
   }
 }

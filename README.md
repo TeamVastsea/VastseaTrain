@@ -50,11 +50,12 @@ git clone --depth 1 --branch master https://github.com/TeamOpenIndustry/Immersiv
 
 ## 轨道美术加载
 
-轨道模型直接使用美术提供的 `test.obj` / `test.mtl`（`src/main/resources/assets/vastseatrain/models/block/rail/`），**模型文件不做任何修改**：
+轨道模型直接使用美术提供的 `test.obj`，**顶点几何不做任何改动**（`src/main/resources/assets/vastseatrain/models/block/rail/`）：
 
-- 模型前进方向为 -X，横向（Z）3 格、纵向 1 格，轨顶 `y = 0.75`，道床向下延伸到方块下方被地面遮住。
-- 材质使用相对路径（`map_Kd gravel.png` 等），贴图位于 `assets/vastseatrain/textures/block/rail/`。
-- 坐标适配全部写在模型 JSON 里：`block/rail/test.json` 绕方块中心旋转 90°、抬高 0.75 格，把模型坐标系对齐到方块坐标系；`rail_core.json`（中心格）、`rail_slab_left.json` / `rail_slab_right.json`（左右道床格，旋转 180° 取对称半边）都从它继承。
-- 中心格渲染完整模型，左右两格通过两套翻转后的 JSON 拼接同一段模型的另外两半；`test_bed.json` 隐藏钢轨分组 `RAIL_LEFT_b` / `RAIL_RIGHT_b`，侧格只渲染道床。
+- 模型约定：前进方向 -X、横向（Z）3 格、纵向 1 格，原点在方块上表面中心，轨顶 `y = 0.75`，道床向下延伸到方块下方被地面遮住。
+- 把模型摆进方块坐标系只写在 `models/block/rail/test.json` 的 `transform` 里（绕方块中心旋转 90°），方块状态和代码里都没有朝向属性；要换朝向只改这一条 `rotation`。
+- 两侧补位格用 `test_bed.json`（只保留道床，隐藏 `RAIL_BASE_b1_2` 与钢轨分组），左右各自平移一格：`rail_slab_left.json` 平移 `+1`，`rail_slab_right.json` 平移 `-1`，拼起来与中心格的完整模型对齐。
+- 材质：`test.mtl` 沿用美术的材质参数，只把 `map_Kd` 改成带命名空间的资源路径。**Forge 的 OBJ 加载器只认 `[a-z_-]` 组成的贴图名**（`UnbakedGeometryHelper.FILESYSTEM_PATH_TO_RESLOC`），文件名带数字或未标命名空间都会解析成紫黑棋盘格，所以贴图统一用字母命名：`gravel`、`concrete_silver`、`rail_sleeper_top`、`rail_sleeper_side`、`rail_fastener`。
+- 模型文件引入全新放在 `rail/` 下（`test.json` 用 `mtl_override` 指向 `test.mtl`），不会被 Forge 当成方块模型预加载。
 
-美术重新导出模型时，只要继续保持“前进方向 -X、3 格宽、轨顶 0.75”的约定，直接覆盖 `test.obj` / `test.mtl` 即可，不需要改代码或 JSON。
+美术重新导出时，只要保持上面的坐标约定并继续使用字母贴图名，覆盖 `test.obj` / `test.mtl` 即可，不需要改代码或 JSON。

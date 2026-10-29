@@ -1,6 +1,5 @@
 package com.fastjim.vastseatrain.track;
 
-import com.fastjim.vastseatrain.block.RailBlock;
 import com.fastjim.vastseatrain.block.RailSlabBlock;
 import com.fastjim.vastseatrain.registry.VTBlocks;
 import net.minecraft.core.BlockPos;
@@ -9,6 +8,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * 服务器端铺轨。世界修改只在这里发生；全部平面校验通过后才开始写入，避免留下半截轨道。
@@ -47,25 +50,28 @@ public final class TrackPlacer {
             }
         }
 
-        BlockState rail = VTBlocks.RAIL.get().defaultBlockState()
-                .setValue(RailBlock.FACING, dir)
-                .setValue(RailBlock.CURVED, false);
+        BlockState rail = VTBlocks.RAIL.get().defaultBlockState();
         BlockState left = VTBlocks.RAIL_SLAB.get().defaultBlockState()
-                .setValue(RailSlabBlock.FACING, dir)
                 .setValue(RailSlabBlock.HALF, RailSlabBlock.Half.LEFT);
         BlockState right = left.setValue(RailSlabBlock.HALF, RailSlabBlock.Half.RIGHT);
 
+        List<BlockPos> placed = new ArrayList<>(rows.length * TrackLayout.WIDTH_BLOCKS);
         for (BlockPos[] row : rows) {
             if (!level.getBlockState(row[1]).is(VTBlocks.RAIL.get())) {
                 level.setBlock(row[1], rail, Block.UPDATE_ALL);
             }
+            placed.add(row[1]);
             if (!level.getBlockState(row[0]).is(VTBlocks.RAIL_SLAB.get())) {
                 level.setBlock(row[0], left, Block.UPDATE_ALL);
             }
+            placed.add(row[0]);
             if (!level.getBlockState(row[2]).is(VTBlocks.RAIL_SLAB.get())) {
                 level.setBlock(row[2], right, Block.UPDATE_ALL);
             }
+            placed.add(row[2]);
         }
+        // 整段登记进存档：后续破坏任意一格都会带动整段移除
+        TrackSegments.get(level).addSegment(UUID.randomUUID(), placed);
         return null;
     }
 }
