@@ -22,4 +22,9 @@ final class RailModelLog {
         VastseaTrain.LOGGER.info("轨道模型已烘焙：{} 个材质段，{} 个四边形，平移 ({}, {}, {})",
                 meshes, quads, translation.x(), translation.y(), translation.z());
     }
+
+    /** 烘焙期发现的数据异常（例如 UV 跨度被截断）。 */
+    static void warn(String format, Object... args) {
+        VastseaTrain.LOGGER.warn(format, args);
+    }
 }

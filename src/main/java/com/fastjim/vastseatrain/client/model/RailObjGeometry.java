@@ -210,22 +210,34 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         if (count < 3) {
             return;
         }
-        // OBJ 面通常是三角形或四边形；更多顶点按扇形拆分
-        for (int i = 1; i + 1 < count; i++) {
-            Vector3f p0 = vertexPosition(parts[1], positions);
-            Vector3f p1 = vertexPosition(parts[i + 1], positions);
-            Vector3f p2 = vertexPosition(parts[i + 2], positions);
-            float[] uv0 = vertexUv(parts[1], texCoords);
-            float[] uv1 = vertexUv(parts[i + 1], texCoords);
-            float[] uv2 = vertexUv(parts[i + 2], texCoords);
-            if (p0 == null || p1 == null || p2 == null || uv0 == null || uv1 == null || uv2 == null) {
-                continue;
-            }
-            mesh.triangles.add(new Triangle(
-                    new Vector3f[]{p0, p1, p2},
-                    new float[]{uv0[0], uv1[0], uv2[0]},
-                    new float[]{uv0[1], uv1[1], uv2[1]}));
+        // OBJ 面可能是三角形或四边形，也可能是更多顶点。
+        // 四边形按 (0,1,2) + (0,2,3) 共用对角线拆分，避免扇形拆分时重复顶点导致面积丢失。
+        if (count == 4) {
+            addTriangle(mesh, parts, new int[]{1, 2, 3}, positions, texCoords);
+            addTriangle(mesh, parts, new int[]{1, 3, 4}, positions, texCoords);
+            return;
         }
+        for (int i = 1; i + 1 < count; i++) {
+            addTriangle(mesh, parts, new int[]{1, i + 1, i + 2}, positions, texCoords);
+        }
+    }
+
+    /** 按 OBJ 面里的三个顶点序号token生成一个三角面。 */
+    private static void addTriangle(Mesh mesh, String[] parts, int[] tokens,
+                                    List<Vector3f> positions, List<float[]> texCoords) {
+        Vector3f p0 = vertexPosition(parts[tokens[0]], positions);
+        Vector3f p1 = vertexPosition(parts[tokens[1]], positions);
+        Vector3f p2 = vertexPosition(parts[tokens[2]], positions);
+        float[] uv0 = vertexUv(parts[tokens[0]], texCoords);
+        float[] uv1 = vertexUv(parts[tokens[1]], texCoords);
+        float[] uv2 = vertexUv(parts[tokens[2]], texCoords);
+        if (p0 == null || p1 == null || p2 == null || uv0 == null || uv1 == null || uv2 == null) {
+            return;
+        }
+        mesh.triangles.add(new Triangle(
+                new Vector3f[]{p0, p1, p2},
+                new float[]{uv0[0], uv1[0], uv2[0]},
+                new float[]{uv0[1], uv1[1], uv2[1]}));
     }
 
     @Nullable
@@ -322,6 +334,11 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         int endV = (int) Math.ceil(maxV);
         int tilesU = Math.min(MAX_TILES, endU - startU);
         int tilesV = Math.min(MAX_TILES, endV - startV);
+        if (maxU > startU + MAX_TILES || maxV > startV + MAX_TILES) {
+            // 被 MAX_TILES 截断时网格不再对齐整数边界，相邻块会各采半张贴图。
+            // 这种情况属于数据异常，宁可记录出来也不要静默画出错位的面。
+            RailModelLog.warn("UV 跨度超过 {} 格，已被截断：u {}-{}, v {}-{}", MAX_TILES, minU, maxU, minV, maxV);
+        }
 
         if (tilesU <= 1 && tilesV <= 1) {
             // 单格：美术 UV 本身就在一张贴图内，原样保留（归一化会改变贴图比例）
@@ -510,7 +527,12 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
             return List.of();
         }
         Vector3f normal = faceNormal(source);
-        Direction direction = Direction.getNearest(normal.x(), normal.y(), normal.z());
+        // 面的朝向由几何绕序决定。三角形统一按“正面”上报，不要用 getNearest 得到的斜向方向：
+        // 渲染器会按这个方向做朝向判断，斜向会被当成背对镜头而整面不画。
+        Direction forward = Direction.getNearest(normal.x(), normal.y(), normal.z());
+        if (forward == null) {
+            forward = Direction.UP;
+        }
         Vector3f rotatedNormal = new Vector3f(normal);
         if (rotate) {
             rotation.transformNormal(rotatedNormal);
@@ -519,14 +541,14 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         List<BakedQuad> quads = new ArrayList<>(Math.max(1, count - 2));
         if (count == 4) {
             // 四边形：直接用 4 个顶点组成一个 quad，不扇形拆分（拆分会重复顶点、产生退化三角形）
-            BakedQuad quad = makeQuad(flat, new int[]{0, 1, 2, 3}, sprite, direction, rotatedNormal, rotation, rotate);
+            BakedQuad quad = makeQuad(flat, new int[]{0, 1, 2, 3}, sprite, forward, rotatedNormal, rotation, rotate);
             if (quad != null) {
                 quads.add(quad);
             }
         } else {
             // 三角形或更多顶点：扇形三角化，每个三角形补齐成 quad
             for (int i = 1; i + 1 < count; i++) {
-                BakedQuad quad = makeQuad(flat, new int[]{0, i, i + 1, i + 1}, sprite, direction,
+                BakedQuad quad = makeQuad(flat, new int[]{0, i, i + 1, i + 1}, sprite, forward,
                         rotatedNormal, rotation, rotate);
                 if (quad != null) {
                     quads.add(quad);
@@ -539,7 +561,7 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
     /** 按给定顶点顺序生成一个 {@link BakedQuad}；第四位与前一位重复即将三角形补齐为 quad。 */
     @Nullable
     private BakedQuad makeQuad(float[] flat, int[] corners, TextureAtlasSprite sprite,
-                               Direction direction, Vector3f rotatedNormal,
+                               Direction forward, Vector3f rotatedNormal,
                                Transformation rotation, boolean rotate) {
         // 面积近似为零的退化面直接丢弃：画出来只会闪烁或产生破面
         Vector3f a = new Vector3f(flat[corners[0] * 5], flat[corners[0] * 5 + 1], flat[corners[0] * 5 + 2]);
@@ -554,7 +576,12 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         buffer.setSprite(sprite);
         buffer.setTintIndex(-1);
         buffer.setShade(shadeQuads);
-        buffer.setDirection(direction);
+        // 四边形拆成的两个三角形，中心可能正好落在对角线接缝上，朝对角线的法线会被判为不可见。
+        // 这里显式传入 forward，让四边形与三角形都照常渲染。
+        buffer.setDirection(forward);
+        // 关闭逐顶点 AO：自定义几何的道床面与地形方块共面，AO 会把面亮度改为依赖周围方块，
+        // 结果就是面上出现三角形亮斑或暗洞。轨道整体亮度交给方块光照与 shade 即可。
+        buffer.setHasAmbientOcclusion(false);
         for (int corner : corners) {
             Vector3f position = new Vector3f(flat[corner * 5], flat[corner * 5 + 1], flat[corner * 5 + 2]);
             if (rotate) {
