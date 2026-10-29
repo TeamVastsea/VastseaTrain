@@ -1,10 +1,5 @@
 # Blender 5.2.3 LTS MTL File: 'None'
 # www.blender.org
-#
-# Derived from the artist's b1.mtl: only map_Kd is repointed to mod textures.
-# Material parameters and geometry are unchanged.
-# This file MUST stay pure ASCII: Forge's OBJ loader parses it as ASCII,
-# so even a comment with non-ASCII bytes breaks material parsing.
 
 newmtl Material_#80
 Ns 0.000000
@@ -14,7 +9,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/gravel
+map_Kd gravel.png
 
 newmtl Material_#81
 Ns 0.000000
@@ -24,7 +19,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/concrete_silver
+map_Kd concrete_silver.png
 
 newmtl Material_#82
 Ns 0.000000
@@ -34,7 +29,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/rail_fastener
+map_Kd 2.png
 
 newmtl Material_#83
 Ns 0.000000
@@ -44,7 +39,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/rail_sleeper_side
+map_Kd 1.png
 
 newmtl Material_#84
 Ns 0.000000
@@ -54,4 +49,4 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/rail_sleeper_top
+map_Kd 3.png

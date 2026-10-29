@@ -7,9 +7,14 @@
   "shade_quads": true,
   "emissive_ambient": false,
   "transform": {
-    "origin": "center",
-    "translation": [0, 0.5, 0],
-    "rotation": [0, 90, 0],
-    "scale": 1
+    "translation": [0, 0.625, 0]
+  },
+  "textures": {
+    "particle": "vastseatrain:block/rail/gravel",
+    "gravel": "vastseatrain:block/rail/gravel.png",
+    "concrete_silver": "vastseatrain:block/rail/concrete_silver.png",
+    "2": "vastseatrain:block/rail/2.png",
+    "1": "vastseatrain:block/rail/1.png",
+    "3": "vastseatrain:block/rail/3.png"
   }
 }

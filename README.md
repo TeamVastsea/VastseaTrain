@@ -50,11 +50,11 @@ git clone --depth 1 --branch master https://github.com/TeamOpenIndustry/Immersiv
 
 ## 轨道美术加载
 
-轨道使用美术提供的 `test.obj`，**顶点几何不做任何改动**。完整规则见 [`docs/rail-model.md`](docs/rail-model.md)，要点：
+轨道使用美术提供的 OBJ，**模型、材质、贴图原样放在 `assets/vastseatrain/models/block/rail/` 同一目录**，MTL 用相对文件名引用贴图。完整规则见 [`docs/rail-model.md`](docs/rail-model.md)，要点：
 
-- 模型约定：前进方向 `-X`、原点在轨道段中心、轨顶 `y = 0.75`；纵向约 1.6 格、横向约 4.28 格（美术刻意外扩）。
-- 代码不缩放：占位、碰撞、铺设一律按 `1 × 3` 格计算，模型允许多出并重叠。
-- 摆放只写在 `models/block/rail/test.json` 的 `transform` 里：`rotation: [0,90,0]` + `translation: [0,0.5,0]`。其余朝向由方块状态 `facing` 的 `y` 旋转处理。
-- 左右补位格渲染完整模型并在 JSON 里沿横轴翻转 180°，按 `facing` 决定左右互换。
-- 材质：`test.mtl` 必须**纯 ASCII**（Forge 按 ASCII 读取，中文注释会让材质整体解析失败），贴图文件名只能用 `[a-z_/-]`（不能带数字）。
-- 分组命名见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)：`rail_full_ballast`、`rail_center_sleeper`、`rail_center_fastener`、`rail_left_rail` / `rail_right_rail`。
+- 所有轨道模型共用同一原点，轨面 `y = 0.750`、道砟底 `y = -1.000`、纵向约 1.6 格、横向约 4.28 格。
+- Forge 不改坐标轴，程序只加一条 `translation: [0, 0.625, 0]`，让轨面落在方块顶面。
+- 南北朝向交给 blockstate 的 `y` 旋转。
+- MTL 必须纯 ASCII，否则整片紫黑。
+- 占位、碰撞、铺设按 1 × 3 格计算，越界部分允许重叠。
+- 分组命名见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)。
