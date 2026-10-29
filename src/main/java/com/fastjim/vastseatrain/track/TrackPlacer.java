@@ -1,5 +1,6 @@
 package com.fastjim.vastseatrain.track;
 
+import com.fastjim.vastseatrain.block.RailBlock;
 import com.fastjim.vastseatrain.block.RailSlabBlock;
 import com.fastjim.vastseatrain.registry.VTBlocks;
 import net.minecraft.core.BlockPos;
@@ -50,10 +51,11 @@ public final class TrackPlacer {
             }
         }
 
-        BlockState rail = VTBlocks.RAIL.get().defaultBlockState();
+        BlockState rail = VTBlocks.RAIL.get().defaultBlockState().setValue(RailBlock.FACING, dir);
         BlockState left = VTBlocks.RAIL_SLAB.get().defaultBlockState()
-                .setValue(RailSlabBlock.HALF, RailSlabBlock.Half.LEFT);
-        BlockState right = left.setValue(RailSlabBlock.HALF, RailSlabBlock.Half.RIGHT);
+                .setValue(RailSlabBlock.FACING, dir)
+                .setValue(RailSlabBlock.HALF, halfFor(dir, true));
+        BlockState right = left.setValue(RailSlabBlock.HALF, halfFor(dir, false));
 
         List<BlockPos> placed = new ArrayList<>(rows.length * TrackLayout.WIDTH_BLOCKS);
         for (BlockPos[] row : rows) {
@@ -73,5 +75,16 @@ public final class TrackPlacer {
         // 整段登记进存档：后续破坏任意一格都会带动整段移除
         TrackSegments.get(level).addSegment(UUID.randomUUID(), placed);
         return null;
+    }
+
+    /**
+     * 补位格需要哪种半侧模型。
+     * <p>
+     * 补位模型是把完整模型沿轨道横轴翻转得到的，而方块状态的 {@code y} 旋转对左格
+     * （局部 Z = +1）和右格（局部 Z = -1）作用方向不同：朝向为北/西时应当翻转另一侧。
+     */
+    private static RailSlabBlock.Half halfFor(Direction forward, boolean leftSide) {
+        boolean mirrored = forward == Direction.NORTH || forward == Direction.WEST;
+        return leftSide == mirrored ? RailSlabBlock.Half.RIGHT : RailSlabBlock.Half.LEFT;
     }
 }

@@ -1,9 +1,9 @@
 {
-  "parent": "vastseatrain:block/rail/test_bed",
+  "parent": "vastseatrain:block/rail/test",
   "transform": {
     "origin": "center",
-    "translation": [0, 0, -1],
-    "rotation": [0, 90, 0],
+    "translation": [0, 0, 0],
+    "rotation": [0, 0, 180],
     "scale": 1
   }
 }

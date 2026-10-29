@@ -50,13 +50,11 @@ git clone --depth 1 --branch master https://github.com/TeamOpenIndustry/Immersiv
 
 ## 轨道美术加载
 
-轨道模型直接使用美术提供的 `test.obj`，**顶点几何不做任何改动**（`src/main/resources/assets/vastseatrain/models/block/rail/`）：
+轨道使用美术提供的 `test.obj`，**顶点几何不做任何改动**。完整规则见 [`docs/rail-model.md`](docs/rail-model.md)，要点：
 
-- 模型约定：前进方向 -X、横向（Z）3 格、纵向 1 格，原点在方块上表面中心，轨顶 `y = 0.75`，道床向下延伸到方块下方被地面遮住。
-- 把模型摆进方块坐标系只写在 `models/block/rail/test.json` 的 `transform` 里（绕方块中心旋转 90°），方块状态和代码里都没有朝向属性；要换朝向只改这一条 `rotation`。
-- 两侧补位格用 `test_bed.json`（只保留道砟，隐藏 `rail_left_rail` 与 `rail_right_rail`），左右各自平移一格：`rail_slab_left.json` 平移 `+1`，`rail_slab_right.json` 平移 `-1`，拼起来与中心格的完整模型对齐。
-- 分组命名见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)：道砟 `rail_full_ballast`、轨枕 `rail_center_sleeper`、扣件 `rail_center_fastener`、钢轨 `rail_left_rail` / `rail_right_rail`。
-- 材质：`test.mtl` 沿用美术的材质参数，只把 `map_Kd` 改成带命名空间的资源路径。**Forge 的 OBJ 加载器只认 `[a-z_-]` 组成的贴图名**（`UnbakedGeometryHelper.FILESYSTEM_PATH_TO_RESLOC`），文件名带数字或未标命名空间都会解析成紫黑棋盘格，所以贴图统一用字母命名：`gravel`、`concrete_silver`、`rail_sleeper_top`、`rail_sleeper_side`、`rail_fastener`。
-- 模型文件引入全新放在 `rail/` 下（`test.json` 用 `mtl_override` 指向 `test.mtl`），不会被 Forge 当成方块模型预加载。
-
-美术重新导出时，只要保持上面的坐标约定并继续使用字母贴图名，覆盖 `test.obj` / `test.mtl` 即可，不需要改代码或 JSON。
+- 模型约定：前进方向 `-X`、原点在轨道段中心、轨顶 `y = 0.75`；纵向约 1.6 格、横向约 4.28 格（美术刻意外扩）。
+- 代码不缩放：占位、碰撞、铺设一律按 `1 × 3` 格计算，模型允许多出并重叠。
+- 摆放只写在 `models/block/rail/test.json` 的 `transform` 里：`rotation: [0,90,0]` + `translation: [0,0.5,0]`。其余朝向由方块状态 `facing` 的 `y` 旋转处理。
+- 左右补位格渲染完整模型并在 JSON 里沿横轴翻转 180°，按 `facing` 决定左右互换。
+- 材质：`test.mtl` 必须**纯 ASCII**（Forge 按 ASCII 读取，中文注释会让材质整体解析失败），贴图文件名只能用 `[a-z_/-]`（不能带数字）。
+- 分组命名见 [`docs/rail-group-naming.md`](docs/rail-group-naming.md)：`rail_full_ballast`、`rail_center_sleeper`、`rail_center_fastener`、`rail_left_rail` / `rail_right_rail`。

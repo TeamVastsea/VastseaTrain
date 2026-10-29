@@ -1,9 +1,10 @@
 # Blender 5.2.3 LTS MTL File: 'None'
 # www.blender.org
 #
-# 由美术提供的 test.mtl 改写而来：只把 map_Kd 从相对文件名改成带命名空间的资源路径，
-# 几何与材质参数保持原样。Forge 的 OBJ 加载器只识别 [a-z_-] 组成的贴图名（数字/中点会
-# 解析失败并变成紫黑棋盘格），所以贴图文件使用字母命名。
+# Derived from the artist's b1.mtl: only map_Kd is repointed to mod textures.
+# Material parameters and geometry are unchanged.
+# This file MUST stay pure ASCII: Forge's OBJ loader parses it as ASCII,
+# so even a comment with non-ASCII bytes breaks material parsing.
 
 newmtl Material_#80
 Ns 0.000000
@@ -33,7 +34,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/rail_sleeper_side
+map_Kd vastseatrain:block/rail/rail_fastener
 
 newmtl Material_#83
 Ns 0.000000
@@ -43,7 +44,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/rail_sleeper_top
+map_Kd vastseatrain:block/rail/rail_sleeper_side
 
 newmtl Material_#84
 Ns 0.000000
@@ -53,4 +54,4 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 1
-map_Kd vastseatrain:block/rail/rail_fastener
+map_Kd vastseatrain:block/rail/rail_sleeper_top
