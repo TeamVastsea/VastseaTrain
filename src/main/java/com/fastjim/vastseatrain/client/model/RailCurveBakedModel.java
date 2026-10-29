@@ -33,11 +33,11 @@ import java.util.List;
  * 再调用 {@link #getQuads}。于是在这里现算顶点，结果缓存进区块网格，逐帧不再重算，
  * 与直道每格的绘制成本完全一致。
  * <h2>变换</h2>
- * 与直道相比，只把模型原点从方块中心挪到条带的格内位置，并绕 Y 轴转过切线角度：
+ * 与直道相比，只是把模型原点挪到格内的指定位置，并绕 Y 轴转过切线角度：
  * <pre>
- *   x' = cos · p.x − sin · p.z + offsetX
+ *   x' = cos · (p.x − cX) − sin · (p.z − cZ) + cX + radial · cos
  *   y' = p.y + 0.5
- *   z' = sin · p.x + cos · p.z + offsetZ
+ *   z' = sin · (p.x − cX) + cos · (p.z − cZ) + cZ + radial · sin
  * </pre>
  * 模型本身一个顶点都不改（满长度、满宽度），所以钢轨不会被切断；
  * 相邻条带在弯道内侧自然重叠、外侧的间隙由 3 格宽的道床盖住。
@@ -111,13 +111,18 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         float[] xs = new float[count];
         float[] ys = new float[count];
         float[] zs = new float[count];
+        float cos = transform.cos();
+        float sin = transform.sin();
+        float centerX = transform.centerX();
+        float centerZ = transform.centerZ();
+        float radial = transform.radial();
         for (int i = 0; i < count; i++) {
-            float x = p[i * 3] + origin.x();
+            float x = p[i * 3] + origin.x() - centerX;
             float y = p[i * 3 + 1] + origin.y();
-            float z = p[i * 3 + 2] + origin.z();
-            xs[i] = transform.cos() * x - transform.sin() * z + transform.offsetX();
+            float z = p[i * 3 + 2] + origin.z() - centerZ;
+            xs[i] = cos * x - sin * z + centerX + radial * cos;
             ys[i] = y;
-            zs[i] = transform.sin() * x + transform.cos() * z + transform.offsetZ();
+            zs[i] = sin * x + cos * z + centerZ + radial * sin;
         }
         // 法线由旋转后的顶点重新算，面朝向（Direction）也跟着旋转，明暗才对得上
         float nx = (ys[1] - ys[0]) * (zs[2] - zs[0]) - (zs[1] - zs[0]) * (ys[2] - ys[0]);

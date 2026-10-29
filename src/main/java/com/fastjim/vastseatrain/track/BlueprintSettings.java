@@ -61,10 +61,10 @@ public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boole
         return TrackLayout.BLOCK_SPAN;
     }
 
-    /** 沿线方块数（直线：段数；弯道：条带数）。不含两侧支撑块。 */
+    /** 沿线方块数（直线：段数；弯道：覆盖的格数）。不含两侧支撑块。 */
     public int totalBlocks() {
         if (isCurve()) {
-            return CurvePlan.stripCount(RailCurve.length(curveRadius));
+            return CurvePlan.estimateBlocks(curveRadius);
         }
         return length * TrackLayout.BLOCK_SPAN;
     }

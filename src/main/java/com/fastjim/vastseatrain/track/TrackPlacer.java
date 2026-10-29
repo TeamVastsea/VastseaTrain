@@ -97,7 +97,7 @@ public final class TrackPlacer {
             level.setBlock(pos, state, Block.UPDATE_ALL);
             BlockEntity entity = level.getBlockEntity(pos);
             if (entity instanceof RailCurveBlockEntity curve) {
-                curve.setPlacement(piece.angle(), piece.offsetX(), piece.offsetZ(),
+                curve.setPlacement(piece.angle(), piece.originX(), piece.originZ(), piece.radial(),
                         plan.radius(), plan.left());
             }
             placed.add(pos);

@@ -35,8 +35,7 @@ public final class RailCurve {
         return ANGLE * radius;
     }
 
-    public static double directionX(Direction dir) {
-        return switch (dir) {
+    public static double directionX(Direction dir) {        return switch (dir) {
             case EAST -> 1.0D;
             case WEST -> -1.0D;
             default -> 0.0D;
@@ -111,7 +110,7 @@ public final class RailCurve {
             return centerZ + radius * (uz * Math.cos(t) + vz * Math.sin(t));
         }
 
-        /** 弧长处的单位切线（前进方向）。 */
+        /** 弧长处的单位切线 {@code (tangentX, tangentZ)}。 */
         public double tangentX(double s) {
             double t = s / radius;
             return -ux * Math.sin(t) + vx * Math.cos(t);
@@ -136,6 +135,37 @@ public final class RailCurve {
         public double distance(double x, double z) {
             return Math.hypot(x - centerX, z - centerZ);
         }
+
+        /** 世界点 {@code (x, z)} 到圆心的方位角（弧度，{@code 0} 在入口点，向切线方向增大）。 */
+        public double angleOf(double x, double z) {
+            double dx = x - centerX;
+            double dz = z - centerZ;
+            return Math.atan2(dx * vx + dz * vz, dx * ux + dz * uz);
+        }
+
+        /** 世界点 {@code (x, z)} 到轨距中心的径向距离（格）。 */
+        public double radial(double x, double z) {
+            return Math.hypot(x - centerX, z - centerZ);
+        }
+
+        /** 入口点（世界坐标）到该点的<b>有符号</b>径向距离：圆内为负、圆外为正，钢轨设计值即 {@code ±HALF_GAUGE}。 */
+        public double signedOffset(double x, double z) {
+            double dx = x - centerX;
+            double dz = z - centerZ;
+            return Math.hypot(dx, dz) - radius;
+        }
+
+        /**
+         * 把世界坐标换到“圆轨道局部坐标”：长度轴沿切线（前进方向为正）、宽度轴沿半径方向
+         * （与直道模型一致，{@code +Z} 在前进方向左侧），径向用 {@link #signedOffset} 衡量。
+         * 这样同一套判定可以直接套在直道模型上。
+         */
+        public double localLength(double x, double z, double arc) {
+            double t = arc / radius;
+            double tx = -ux * Math.sin(t) + vx * Math.cos(t);
+            double tz = -uz * Math.sin(t) + vz * Math.cos(t);
+            return (x - pointX(arc)) * tx + (z - pointZ(arc)) * tz;
+        }
     }
 
     public static Frame frame(BlockPos start, Direction entry, boolean left, int radius) {
@@ -143,16 +173,30 @@ public final class RailCurve {
     }
 
     /**
-     * 一个弯道方块里那一条模型的摆放：绕方块中心的 Y 轴旋转角（余弦/正弦）与条带中心在格内的偏移。
+     * 一个弯道方块里那份模型的摆放：绕<b>方块中心</b>的 Y 轴旋转角（余弦/正弦）、
+     * 旋转中心在格内的偏移，以及模型原点的径向与切向微调（用于把钢轨精确贴到弯曲的弧线上）。
      * <p>
-     * 渲染公式（方块局部坐标，{@code p} 是模型原始顶点）：
+     * 渲染公式（方块局部坐标，{@code p} 是模型原始顶点，已去掉原点垂直居中），
+     * 先把 {@code (a, b)} 当作以 {@code (cx, cz)} 为中心的长度轴 / 宽度轴分量做旋转变换：
      * <pre>
-     *   x' = cos · p.x − sin · p.z + offsetX
-     *   y' = p.y + 0.5
-     *   z' = sin · p.x + cos · p.z + offsetZ
+     *   a' = cos · a − sin · b
+     *   b' = sin · a + cos · b
+     *   x' = cx + a' + radial · cos
+     *   z' = cz + b' + radial · sin
      * </pre>
-     * 与直道相比只是把模型原点从方块中心挪到 {@code (offsetX, 0.5, offsetZ)} 并转了 {@code θ}。
+     * {@code radial} 是沿该格切线法线方向的微调（负值朝圆心），让模型钢轨正好落在
+     * “以圆心为中心、半径 {@code R ± 0.645}”的圆弧上；一条弯道内 {@code radial} 取值固定，
+     * 只在进入弯道处做一次过渡，因此相邻格不会错位。
      */
-    public record Transform(float cos, float sin, float offsetX, float offsetZ) {
+    public record Transform(float cos, float sin, float centerX, float centerZ, float radial) {
+        /** 模型原点在该格里的水平位置（方块局部坐标，0..1）。 */
+        public float originX() {
+            return centerX + radial * cos;
+        }
+
+        /** 模型原点在该格里的水平位置（方块局部坐标，0..1）。 */
+        public float originZ() {
+            return centerZ + radial * sin;
+        }
     }
 }
