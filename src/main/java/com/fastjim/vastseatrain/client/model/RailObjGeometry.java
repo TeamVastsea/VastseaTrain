@@ -18,7 +18,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.util.GsonHelper;
-import net.minecraft.util.RandomSource;
 import net.minecraftforge.client.RenderTypeGroup;
 import net.minecraftforge.client.model.IModelBuilder;
 import net.minecraftforge.client.model.geometry.IGeometryBakingContext;
@@ -290,13 +289,29 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         boolean rotate = !rotation.isIdentity();
 
         int emitted = 0;
-        RandomSource random = RandomSource.create();
+        int stitched = 0;
         for (Mesh mesh : meshes.values()) {
             TextureAtlasSprite sprite = spriteGetter.apply(context.getMaterial(mesh.texture));
-            for (Triangle triangle : mesh.triangles) {
-                List<float[]> pieces = tileUv(triangle);
-                for (float[] piece : pieces) {
-                    for (BakedQuad quad : buildQuads(piece, triangle, sprite, rotation, rotate)) {
+            // 先把共用边的三角面拼成整块：逐三角形提交时，共边两侧各自插值，浮点误差会挤出一像素细缝，
+            // 在几乎与视线平行的道床面上叠成三角形空洞。
+            List<Triangle> triangles = mesh.triangles;
+            float[] data = new float[triangles.size() * 15];
+            for (int t = 0; t < triangles.size(); t++) {
+                Triangle triangle = triangles.get(t);
+                for (int i = 0; i < 3; i++) {
+                    int base = (t * 3 + i) * 5;
+                    data[base] = triangle.position()[i].x();
+                    data[base + 1] = triangle.position()[i].y();
+                    data[base + 2] = triangle.position()[i].z();
+                    data[base + 3] = triangle.u()[i];
+                    data[base + 4] = triangle.v()[i];
+                }
+            }
+            RailMeshStitcher.Result result = RailMeshStitcher.stitch(data, triangles.size());
+            stitched += result.patches().size();
+            for (RailMeshStitcher.Patch patch : result.patches()) {
+                for (Triangle piece : tilePatch(patch)) {
+                    for (BakedQuad quad : buildQuads(piece, sprite, rotation, rotate)) {
                         if (quad != null) {
                             builder.addUnculledFace(quad);
                             emitted++;
@@ -305,8 +320,53 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
                 }
             }
         }
-        RailModelLog.baked(meshes.size(), emitted, translation);
+        RailModelLog.baked(meshes.size(), stitched, emitted, translation);
         return builder.build();
+    }
+
+    /**
+     * 把一个拼接好的补丁展开成三角面列表：先按 UV 整数格切块，再逐块扇形三角化。
+     * <p>
+     * 补丁内部的三角形共用顶点下标，展开后仍然是“相邻三角形共用同一对顶点”的网格，
+     * 相邻面不会各自算出一份略有差异的交点。
+     */
+    private List<Triangle> tilePatch(RailMeshStitcher.Patch patch) {
+        float[] vertices = patch.vertices();
+        int[] indices = patch.indices();
+        List<Triangle> result = new ArrayList<>(indices.length / 3);
+        for (int i = 0; i < indices.length; i += 3) {
+            int a = indices[i];
+            int b = indices[i + 1];
+            int c = indices[i + 2];
+            Triangle triangle = new Triangle(
+                    new Vector3f[]{
+                            new Vector3f(vertices[a * 5], vertices[a * 5 + 1], vertices[a * 5 + 2]),
+                            new Vector3f(vertices[b * 5], vertices[b * 5 + 1], vertices[b * 5 + 2]),
+                            new Vector3f(vertices[c * 5], vertices[c * 5 + 1], vertices[c * 5 + 2])},
+                    new float[]{vertices[a * 5 + 3], vertices[b * 5 + 3], vertices[c * 5 + 3]},
+                    new float[]{vertices[a * 5 + 4], vertices[b * 5 + 4], vertices[c * 5 + 4]});
+            for (float[] piece : tileUv(triangle)) {
+                int count = piece.length / 5;
+                if (count < 3) {
+                    continue;
+                }
+                Vector3f[] position = new Vector3f[count];
+                float[] u = new float[count];
+                float[] v = new float[count];
+                for (int k = 0; k < count; k++) {
+                    position[k] = new Vector3f(piece[k * 5], piece[k * 5 + 1], piece[k * 5 + 2]);
+                    u[k] = piece[k * 5 + 3];
+                    v[k] = piece[k * 5 + 4];
+                }
+                for (int k = 1; k + 1 < count; k++) {
+                    result.add(new Triangle(
+                            new Vector3f[]{position[0], position[k], position[k + 1]},
+                            new float[]{u[0], u[k], u[k + 1]},
+                            new float[]{v[0], v[k], v[k + 1]}));
+                }
+            }
+        }
+        return result;
     }
 
     /**
@@ -516,16 +576,12 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
     }
 
     /**
-     * 把切好的多边形（扇形三角化后逐个）转成 {@link BakedQuad} 列表，一个多边形可能产生多个四边形。
+     * 把一个三角面转成 {@link BakedQuad}（第四个角与第三个角重合，即三角形）。
      * 位置先按朝向旋转，再叠加 {@code translation}，最后写入顶点缓冲。
      */
     @Nullable
-    private List<BakedQuad> buildQuads(float[] flat, Triangle source, TextureAtlasSprite sprite,
+    private List<BakedQuad> buildQuads(Triangle source, TextureAtlasSprite sprite,
                                        Transformation rotation, boolean rotate) {
-        int count = flat.length / 5;
-        if (count < 3) {
-            return List.of();
-        }
         Vector3f normal = faceNormal(source);
         // 面的朝向由几何绕序决定。三角形统一按“正面”上报，不要用 getNearest 得到的斜向方向：
         // 渲染器会按这个方向做朝向判断，斜向会被当成背对镜头而整面不画。
@@ -537,37 +593,21 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         if (rotate) {
             rotation.transformNormal(rotatedNormal);
         }
-
-        List<BakedQuad> quads = new ArrayList<>(Math.max(1, count - 2));
-        if (count == 4) {
-            // 四边形：直接用 4 个顶点组成一个 quad，不扇形拆分（拆分会重复顶点、产生退化三角形）
-            BakedQuad quad = makeQuad(flat, new int[]{0, 1, 2, 3}, sprite, forward, rotatedNormal, rotation, rotate);
-            if (quad != null) {
-                quads.add(quad);
-            }
-        } else {
-            // 三角形或更多顶点：扇形三角化，每个三角形补齐成 quad
-            for (int i = 1; i + 1 < count; i++) {
-                BakedQuad quad = makeQuad(flat, new int[]{0, i, i + 1, i + 1}, sprite, forward,
-                        rotatedNormal, rotation, rotate);
-                if (quad != null) {
-                    quads.add(quad);
-                }
-            }
-        }
-        return quads;
+        BakedQuad quad = makeQuad(source, sprite, forward, rotatedNormal, rotation, rotate);
+        return quad == null ? List.of() : List.of(quad);
     }
 
-    /** 按给定顶点顺序生成一个 {@link BakedQuad}；第四位与前一位重复即将三角形补齐为 quad。 */
+    /** 生成一个 {@link BakedQuad}：三个顶点 + 与第三个顶点重合的第四角。 */
     @Nullable
-    private BakedQuad makeQuad(float[] flat, int[] corners, TextureAtlasSprite sprite,
+    private BakedQuad makeQuad(Triangle source, TextureAtlasSprite sprite,
                                Direction forward, Vector3f rotatedNormal,
                                Transformation rotation, boolean rotate) {
+        Vector3f[] position = source.position();
+        float[] u = source.u();
+        float[] v = source.v();
         // 面积近似为零的退化面直接丢弃：画出来只会闪烁或产生破面
-        Vector3f a = new Vector3f(flat[corners[0] * 5], flat[corners[0] * 5 + 1], flat[corners[0] * 5 + 2]);
-        Vector3f b = new Vector3f(flat[corners[1] * 5], flat[corners[1] * 5 + 1], flat[corners[1] * 5 + 2]);
-        Vector3f c = new Vector3f(flat[corners[2] * 5], flat[corners[2] * 5 + 1], flat[corners[2] * 5 + 2]);
-        Vector3f cross = b.sub(a).cross(c.sub(a));
+        Vector3f cross = new Vector3f(position[1]).sub(position[0])
+                .cross(new Vector3f(position[2]).sub(position[0]));
         if (cross.lengthSquared() < 1.0E-12F) {
             return null;
         }
@@ -576,23 +616,24 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         buffer.setSprite(sprite);
         buffer.setTintIndex(-1);
         buffer.setShade(shadeQuads);
-        // 四边形拆成的两个三角形，中心可能正好落在对角线接缝上，朝对角线的法线会被判为不可见。
-        // 这里显式传入 forward，让四边形与三角形都照常渲染。
+        // 三角形补齐成的四边形，第四角的法线依赖前三个角，可能被判为不可见。
+        // 这里显式传入 forward，保证所有面照常渲染。
         buffer.setDirection(forward);
         // 关闭逐顶点 AO：自定义几何的道床面与地形方块共面，AO 会把面亮度改为依赖周围方块，
         // 结果就是面上出现三角形亮斑或暗洞。轨道整体亮度交给方块光照与 shade 即可。
         buffer.setHasAmbientOcclusion(false);
-        for (int corner : corners) {
-            Vector3f position = new Vector3f(flat[corner * 5], flat[corner * 5 + 1], flat[corner * 5 + 2]);
+        for (int corner = 0; corner < 4; corner++) {
+            int index = Math.min(corner, 2);
+            Vector3f pos = new Vector3f(position[index]);
             if (rotate) {
-                Vector4f transformed = new Vector4f(position, 1.0F);
+                Vector4f transformed = new Vector4f(pos, 1.0F);
                 rotation.transformPosition(transformed);
-                position.set(transformed.x(), transformed.y(), transformed.z());
+                pos.set(transformed.x(), transformed.y(), transformed.z());
             }
-            position.add(translation);
-            buffer.vertex(position.x(), position.y(), position.z());
+            pos.add(translation);
+            buffer.vertex(pos.x(), pos.y(), pos.z());
             buffer.color(1.0F, 1.0F, 1.0F, 1.0F);
-            buffer.uv(sprite.getU(flat[corner * 5 + 3] * 16.0F), sprite.getV(flat[corner * 5 + 4] * 16.0F));
+            buffer.uv(sprite.getU(u[index] * 16.0F), sprite.getV(v[index] * 16.0F));
             buffer.uv2(0);
             buffer.normal(rotatedNormal.x(), rotatedNormal.y(), rotatedNormal.z());
             buffer.endVertex();
