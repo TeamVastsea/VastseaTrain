@@ -28,7 +28,7 @@ import java.util.Map;
  * 界面 3D 预览用的模型数据。
  * <p>
  * 为什么单独解析而不是复用烘焙好的方块模型：已烘焙模型的顶点里已经没有 UV、文件信息也被丢掉了，
- * 而界面不需要“渲染到屏幕外的目标”，只需要顶点 + 贴图坐标，直接读美术文件最简单、也最好调试。
+ * 而界面不需要离屏渲染目标，只需要顶点 + 贴图坐标，直接读美术文件最简单、也最好调试。
  * <p>
  * UV 处理与游戏内加载器保持一致：材质贴图引用解析成图集贴图，三角面按 UV 整数格切块，
  * 每块用完整的 {@code 0..1} 贴图坐标——否则界面里会像 {@code forge:obj} 那样出现花屏。
@@ -42,7 +42,7 @@ public final class RailPreviewGeometry {
     /**
      * 一个模型。
      *
-     * @param faces     三角面（局部坐标，单位：格，方块上表面 {@code y = 0}）
+     * @param faces     三角面（OBJ 局部坐标，单位：格）
      * @param sprites   六朝向各自的贴图
      * @param minX      包围盒（用于自动调整相机与大小）
      */
@@ -105,21 +105,11 @@ public final class RailPreviewGeometry {
                 "models/block/" + style.straightModel() + ".json");
         JsonObject json = readJson(modelId);
 
-        Vector3f translation = new Vector3f(0.0F, 0.0F, 0.0F);
-        if (json.has("transform") && json.get("transform").isJsonObject()) {
-            JsonObject transform = json.getAsJsonObject("transform");
-            if (transform.has("translation") && transform.get("translation").isJsonArray()) {
-                JsonArray array = transform.getAsJsonArray("translation");
-                translation = new Vector3f(array.get(0).getAsFloat(), array.get(1).getAsFloat(),
-                        array.get(2).getAsFloat());
-            }
-        }
         boolean flipV = json.has("flip_v") && json.get("flip_v").getAsBoolean();
-        // 模型原点在方块里的位置（translation，0.5 = 方块中心），下方各顶点统一减去它，
-        // 使方块上表面落在 y = 0、模型居中于原点，预览相机就能直接对准 (0, 0, 0)。
-        float originY = translation.y;
-        float originX = translation.x();
-        float originZ = translation.z();
+        // 预览沿用 OBJ 原始局部坐标，不叠加方块放置用的根模型 translation。
+        float originX = 0.0F;
+        float originY = 0.0F;
+        float originZ = 0.0F;
 
         Map<String, String> textureRefs = new LinkedHashMap<>();
         if (json.has("textures") && json.get("textures").isJsonObject()) {
@@ -226,10 +216,8 @@ public final class RailPreviewGeometry {
             path = "vastseatrain:block/rail/gravel";
         }
         ResourceLocation id = ResourceLocation.parse(path);
-        // 贴图名字按方块图集那套前缀（textures/ + .png）补全；界面里直接按名字取会找不到
-        ResourceLocation atlasId = ResourceLocation.fromNamespaceAndPath(id.getNamespace(),
-                "textures/" + id.getPath() + ".png");
-        return SPRITE_CACHE.computeIfAbsent(atlasId, key -> Minecraft.getInstance()
+        // 图集按 sprite ID 查找（block/rail/name），不是磁盘文件路径 textures/...png。
+        return SPRITE_CACHE.computeIfAbsent(id, key -> Minecraft.getInstance()
                 .getTextureAtlas(net.minecraft.world.inventory.InventoryMenu.BLOCK_ATLAS)
                 .apply(key));
     }

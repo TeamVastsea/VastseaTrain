@@ -21,7 +21,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * 前进方向 −X、原点在段中心。朝向只通过 {@code blockstates/rail.json} 的 {@code y} 旋转表达：
  * {@code y=90} 让长度轴（X）对齐南北，{@code y=180}/{@code y=0} 对齐东西。
  * <p>
- * 碰撞箱按“长 1 格、宽 3 格”计算，与模型实际外形无关（模型为了观感会略微越界）。
+ * 选择与碰撞形状按“长 1 格、宽 3 格、高 1/4 格”计算，与模型实际外形无关。
  */
 public class RailBlock extends HorizontalDirectionalBlock {
     /** 一段轨道在平面上的长度（格）。 */
@@ -31,11 +31,10 @@ public class RailBlock extends HorizontalDirectionalBlock {
     /**
      * 形状顶面在“方块坐标”下的高度。
      * <p>
-     * {@link Block#box} 不会把越界坐标夹回 0..16，但方块形状在网格对齐时会被当作平面处理：
-     * 高度的几分之几决定它能否与邻居拼成整面。用整数 1 格，轨道格才会被当作完整的实心方块
-     * 参与天空光衰减与面剔除，从而在地面上投出阴影。
+     * {@link Block#box} 的坐标单位是 1/16 格，因此 4 表示 1/4 格高。X/Z 越界部分用于覆盖整段轨道宽度；
+     * 遮挡与天空光行为由下方单独实现，不依赖这个碰撞形状被当成完整方块。
      */
-    private static final double BED_HEIGHT = 2.0D;
+    private static final double BED_HEIGHT = 4.0D;
     /** 3 格宽的形状：南北朝向时沿 X 铺开，东西朝向时沿 Z 铺开。 */
     private static final VoxelShape SHAPE_X = Block.box(0.0D, 0.0D, -16.0D, 16.0D, BED_HEIGHT, 32.0D);
     private static final VoxelShape SHAPE_Z = Block.box(-16.0D, 0.0D, 0.0D, 32.0D, BED_HEIGHT, 16.0D);
@@ -58,18 +57,21 @@ public class RailBlock extends HorizontalDirectionalBlock {
     /**
      * 方块形状：用于选择框与实体的形状查询。
      * <p>
-     * {@code getShape} <b>不能</b>返回超格形状：Minecraft 会把它当作整格遮挡形状参与相邻方块的面剔除，
-     * 返回“3 格宽”的形状后，周围一圈格子的顶面会被当成被遮住而删掉，看起来就是地面破面/穿模。
-     * 轨道格在网格上就按整格处理，遮挡与剔除全部交给原版的整格逻辑；只有碰撞箱保留 3 格宽。
+     * 选择与碰撞查询都使用 3 格宽、1 格长、1/4 格高的形状。方块的遮挡形状单独返回空形状，
+     * 避免超格范围参与相邻方块的面剔除。
      */
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return Shapes.block();
+        return shape(state);
     }
 
-    /** 3 格宽的接触面：南北朝向时沿 X 方向铺开，东西朝向时沿 Z 方向铺开。 */
+    /** 3 格宽的碰撞面：南北朝向时沿 X 方向铺开，东西朝向时沿 Z 方向铺开。 */
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return shape(state);
+    }
+
+    private static VoxelShape shape(BlockState state) {
         Direction facing = state.getValue(FACING);
         boolean alongZ = facing.getAxis() == Direction.Axis.Z;
         return alongZ ? SHAPE_Z : SHAPE_X;

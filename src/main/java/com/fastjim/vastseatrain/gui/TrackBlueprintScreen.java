@@ -11,8 +11,8 @@ import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Renderable;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 
@@ -21,13 +21,9 @@ import java.util.function.IntConsumer;
 /**
  * 轨道蓝图三栏界面：左栏轨道参数、中栏道床与预览、右栏实时摘要。
  * <p>
- * 所有控件都直接使用 GUI 的屏幕坐标（与游戏自带的界面缩放无关，缩放由游戏统一处理），
- * 窗口变小时只收窄面板与按钮，不再对整块界面做第二次缩放——
- * 之前“整体再缩小一次”会让控件与文字、点击区域错位，也会在自动缩放下显得比原版界面小一圈。
+ * 窗口足够大时使用设计尺寸；较小时统一缩放面板、控件与点击坐标，避免任何一栏被裁掉。
  */
-public class TrackBlueprintScreen extends Screen {
-    /** 三栏布局的最小宽度（设计尺寸）。 */
-    private static final int DESIGN_WIDTH = 560;
+public class TrackBlueprintScreen extends AdaptiveScreen {
     private static final int PANEL_WIDTH = 176;
     private static final int PANEL_GAP = 8;
     private static final int PADDING = 8;
@@ -53,7 +49,7 @@ public class TrackBlueprintScreen extends Screen {
     private int panelHeight;
 
     public TrackBlueprintScreen(ItemStack blueprint) {
-        super(Component.translatable("screen.vastseatrain.blueprint"));
+        super(Component.translatable("screen.vastseatrain.blueprint"), 380, 218);
         this.blueprint = blueprint;
         this.settings = BlueprintSettings.from(blueprint);
     }
@@ -150,14 +146,16 @@ public class TrackBlueprintScreen extends Screen {
 
     /** 按窗口尺寸排版：放得下时用设计尺寸，放不下时收窄面板（但不小于可用的最小宽度）。 */
     private void layout() {
-        panelGap = Math.max(4, Math.min(PANEL_GAP, width / 80));
-        int usable = width - MARGIN * 2;
+        int logicalWidth = logicalWidth();
+        int logicalHeight = logicalHeight();
+        panelGap = Math.max(4, Math.min(PANEL_GAP, logicalWidth / 80));
+        int usable = logicalWidth - MARGIN * 2;
         panelWidth = Mth.clamp((usable - panelGap * 2) / 3, 120, PANEL_WIDTH);
         int contentWidth = panelWidth * 3 + panelGap * 2;
         // 左栏最后一行控件在 top + 168 处结束，面板至少要比它多留一点边距
-        panelHeight = Mth.clamp(height - MARGIN * 2, Math.min(206, height), 250);
-        originX = (width - contentWidth) / 2;
-        originY = Math.max(MARGIN, (height - panelHeight) / 2);
+        panelHeight = Mth.clamp(logicalHeight - MARGIN * 2, 206, 250);
+        originX = (logicalWidth - contentWidth) / 2;
+        originY = (logicalHeight - panelHeight) / 2;
     }
 
     /**
@@ -234,6 +232,10 @@ public class TrackBlueprintScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
+        beginScaledContent(graphics);
+        double scale = uiScale();
+        mouseX = (int) (mouseX / scale);
+        mouseY = (int) (mouseY / scale);
 
         int leftX = originX;
         int middleX = originX + panelWidth + panelGap;
@@ -242,9 +244,9 @@ public class TrackBlueprintScreen extends Screen {
         int panelTop = originY;
         int panelBottom = originY + panelHeight;
 
-        drawPanel(graphics, leftX, panelTop, panelBottom);
-        drawPanel(graphics, middleX, panelTop, panelBottom);
-        drawPanel(graphics, rightX, panelTop, panelBottom);
+        drawPanel(graphics, leftX, panelTop, panelBottom, panelWidth);
+        drawPanel(graphics, middleX, panelTop, panelBottom, panelWidth);
+        drawPanel(graphics, rightX, panelTop, panelBottom, panelWidth);
 
         int titleCenter = leftX + (panelWidth * 3 + panelGap * 2) / 2;
         graphics.drawCenteredString(font, title, titleCenter, originY + 6, 0xFFFFFF);
@@ -266,38 +268,65 @@ public class TrackBlueprintScreen extends Screen {
 
         int summaryX = rightX + PADDING;
         int summaryY = top + 24;
+        int summaryWidth = panelWidth - PADDING * 2;
         if (settings.isCurve()) {
-            graphics.drawString(font, Component.translatable("summary.vastseatrain.length",
-                    Component.translatable("gui.vastseatrain.mode.curve")), summaryX, summaryY, 0xFFFFFF);
-            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_radius", settings.curveRadius()),
-                    summaryX, summaryY + 12, 0xFFFFFF);
-            graphics.drawString(font, turnLabel(), summaryX, summaryY + 24, 0xFFFFFF);
-            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_estimate", settings.totalBlocks()),
-                    summaryX, summaryY + 36, 0xFFFFFF);
+            summaryY = drawWrapped(graphics, Component.translatable("summary.vastseatrain.length",
+                    Component.translatable("gui.vastseatrain.mode.curve")), summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics,
+                    Component.translatable("gui.vastseatrain.curve_radius", settings.curveRadius()),
+                    summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics, turnLabel(), summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics,
+                    Component.translatable("gui.vastseatrain.curve_estimate", settings.estimatedCurvePieces()),
+                    summaryX, summaryY, summaryWidth);
         } else {
-            graphics.drawString(font, Component.translatable("summary.vastseatrain.length", settings.length()), summaryX, summaryY, 0xFFFFFF);
-            graphics.drawString(font, Component.translatable("summary.vastseatrain.blocks", settings.totalBlocks()), summaryX, summaryY + 12, 0xFFFFFF);
-            graphics.drawString(font, Component.translatable("summary.vastseatrain.width", TrackLayout.WIDTH_BLOCKS), summaryX, summaryY + 24, 0xFFFFFF);
-            graphics.drawString(font, Component.translatable("summary.vastseatrain.gauge", settings.gauge().getDisplayName()), summaryX, summaryY + 36, 0xFFFFFF);
-            graphics.drawString(font, Component.translatable("summary.vastseatrain.bed", settings.bed().getDisplayName()), summaryX, summaryY + 48, 0xFFFFFF);
-            graphics.drawString(font, styleLabel(), summaryX, summaryY + 60, 0xFFFFFF);
+            summaryY = drawWrapped(graphics,
+                    Component.translatable("summary.vastseatrain.length", settings.length()),
+                    summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics,
+                    Component.translatable("summary.vastseatrain.blocks", settings.totalBlocks()),
+                    summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics,
+                    Component.translatable("summary.vastseatrain.width", TrackLayout.WIDTH_BLOCKS),
+                    summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics,
+                    Component.translatable("summary.vastseatrain.gauge", settings.gauge().getDisplayName()),
+                    summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics,
+                    Component.translatable("summary.vastseatrain.bed", settings.bed().getDisplayName()),
+                    summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics, styleLabel(), summaryX, summaryY, summaryWidth);
         }
 
-        // 半径过大时给出性能提示：条带数 = 每格一条模型，数量直接影响铺设耗时与渲染负担
+        // 半径过大时给出性能提示：模型实例数直接影响铺设耗时与渲染负担
         if (settings.isCurve() && VTConfig.needsWarning(settings.curveRadius())) {
-            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_warn",
-                    VTConfig.warnRadius(), settings.totalBlocks()), summaryX, summaryY + 62, 0xFF6B6B);
+            drawWrapped(graphics, Component.translatable("gui.vastseatrain.curve_warn",
+                    VTConfig.warnRadius(), settings.estimatedCurvePieces()), summaryX, summaryY,
+                    summaryWidth, 0xFF6B6B);
         }
 
         for (Renderable renderable : this.renderables) {
             renderable.render(graphics, mouseX, mouseY, partialTick);
         }
+        endScaledContent(graphics);
     }
 
-    private static void drawPanel(GuiGraphics graphics, int x, int top, int bottom) {
-        graphics.fill(x, top, x + PANEL_WIDTH, bottom, 0xC0101018);
-        graphics.fill(x, top, x + PANEL_WIDTH, top + 1, 0x80FFD27F);
-        graphics.fill(x, bottom - 1, x + PANEL_WIDTH, bottom, 0x80FFD27F);
+    private int drawWrapped(GuiGraphics graphics, Component text, int x, int y, int maxWidth) {
+        return drawWrapped(graphics, text, x, y, maxWidth, 0xFFFFFF);
+    }
+
+    private int drawWrapped(GuiGraphics graphics, Component text, int x, int y, int maxWidth, int color) {
+        for (FormattedCharSequence line : font.split(text, maxWidth)) {
+            graphics.drawString(font, line, x, y, color);
+            y += 10;
+        }
+        return y + 2;
+    }
+
+    private static void drawPanel(GuiGraphics graphics, int x, int top, int bottom, int width) {
+        graphics.fill(x, top, x + width, bottom, 0xC0101018);
+        graphics.fill(x, top, x + width, top + 1, 0x80FFD27F);
+        graphics.fill(x, bottom - 1, x + width, bottom, 0x80FFD27F);
     }
 
     @Override

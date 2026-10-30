@@ -31,6 +31,6 @@ public class RailCurveObjLoader implements IGeometryLoader<RailCurveGeometry> {
                 ResourceLocation.parse(mtlOverride),
                 flipV,
                 shadeQuads);
-        return new RailCurveGeometry(geometry).withStyles(RailCurveGeometry.readAllStyleJson());
+        return new RailCurveGeometry(geometry, json).withStyles(RailCurveGeometry.readAllStyleJson());
     }
 }

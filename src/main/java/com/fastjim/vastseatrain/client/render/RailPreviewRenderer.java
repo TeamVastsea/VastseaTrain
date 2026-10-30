@@ -72,7 +72,7 @@ public final class RailPreviewRenderer {
         public double pitch = 26.0D;
         /** 缩放倍数，1 为默认距离。 */
         public double zoom = 1.0D;
-        /** 平移（格，垂直屏幕方向）：模型沿屏幕右方偏移 +panU、沿屏幕上方偏移 +panV。 */
+        /** 相机平面内的偏移（格）：正值分别向屏幕右侧、上方移动模型。 */
         public double panU;
         public double panV;
         /** 观察目标（格）。 */
@@ -100,34 +100,11 @@ public final class RailPreviewRenderer {
             zoom = Mth.clamp(zoom * Math.pow(0.85D, scroll), 0.25D, 6.0D);
         }
 
-        /**
-         * 右键拖拽：平移模型，方向与鼠标拖动一致（向右拖 → 模型向右走，向下拖 → 模型向下走）。
-         * <p>
-         * 投影里屏幕 Y 轴向下、模型局部 Y 轴向上，而且屏幕上方还混着水平轴的旋转分量，
-         * 所以按“屏幕右 / 屏幕上”两个方向的逆变换求模型位移，而不是只改一个分量。
-         * 这样任何俯仰角、任何朝向拖起来都跟手。
-         */
+        /** 右键拖拽：在投影平面内移动模型，方向与鼠标拖动一致。 */
         public void dragPan(double dx, double dy) {
             double perPixel = scale();
-            // 屏幕位移（像素）→ 相机空间位移（格外形：右为正、上为正）
-            double screenRight = dx * perPixel;
-            double screenUp = -dy * perPixel;
-            double yawRad = StrictMath.toRadians(yaw);
-            double pitchRad = StrictMath.toRadians(pitch);
-            // 相机空间 (右, 上, 前) 是模型空间向量绕 Y 转 yaw、再绕 X 转 pitch 的结果；
-            // 这里只取“右”与“上”两个轴，反变换回模型空间 (x, y, z)
-            double upX = 0.0D;
-            double upY = Math.cos(pitchRad);
-            double upZ = -Math.sin(pitchRad);
-            double rightX = Math.cos(yawRad);
-            double rightY = 0.0D;
-            double rightZ = -Math.sin(yawRad);
-            double wx = rightX * screenRight + upX * screenUp;
-            double wy = rightY * screenRight + upY * screenUp;
-            double wz = rightZ * screenRight + upZ * screenUp;
-            // 投影里模型位置用的是 (p - target + pan)：要让模型沿 w 移动，pan 要反着加
-            panU -= wx;
-            panV -= wy;
+            panU += dx * perPixel;
+            panV -= dy * perPixel;
         }
 
         /** 复位到默认视角。 */
@@ -160,18 +137,18 @@ public final class RailPreviewRenderer {
             return displayScale;
         }
 
-        /** 相机位置（模型局部坐标）：按当前的旋转、缩放与平移，从“平移后的目标点”退到 DISTANCE·zoom 处。 */
+        /** 相机位置（模型局部坐标）：投影平面偏移与视点使用一致的逆旋转。 */
         public Vec3 eye() {
             double yawRad = StrictMath.toRadians(yaw);
             double pitchRad = StrictMath.toRadians(pitch);
-            // 相机与目标之间在相机空间里是 (0, 0, DISTANCE·zoom)，逆旋转回模型空间
-            double back = DISTANCE * zoom;
-            double cz = back * Math.cos(pitchRad);
-            double cy = -back * Math.sin(pitchRad);
-            double dx = -cz * Math.sin(yawRad);
-            double dz = cz * Math.cos(yawRad);
-            // 平移后模型实际所在的位置是 (target - pan)，相机跟着它走
-            return new Vec3(target.x - panU + dx, target.y - panV + cy, target.z + dz);
+            double cameraUp = -panV;
+            double cameraDepth = -DISTANCE * zoom;
+            double rotatedY = cameraUp * Math.cos(pitchRad) + cameraDepth * Math.sin(pitchRad);
+            double rotatedZ = -cameraUp * Math.sin(pitchRad) + cameraDepth * Math.cos(pitchRad);
+            double cameraRight = -panU;
+            double dx = cameraRight * Math.cos(yawRad) - rotatedZ * Math.sin(yawRad);
+            double dz = cameraRight * Math.sin(yawRad) + rotatedZ * Math.cos(yawRad);
+            return new Vec3(target.x + dx, target.y + rotatedY, target.z + dz);
         }
 
         /** 面是否朝向相机（法线指向眼睛）。 */
@@ -199,14 +176,14 @@ public final class RailPreviewRenderer {
         public double[] project(double px, double py, double pz) {
             double yawRad = StrictMath.toRadians(yaw);
             double pitchRad = StrictMath.toRadians(pitch);
-            double dx = px - target.x + panU;
-            double dy = py - target.y + panV;
+            double dx = px - target.x;
+            double dy = py - target.y;
             double dz = pz - target.z;
             double rx = dx * Math.cos(yawRad) + dz * Math.sin(yawRad);
             double rz = -dx * Math.sin(yawRad) + dz * Math.cos(yawRad);
-            double ry = dy;
-            double cy = ry * Math.cos(pitchRad) - rz * Math.sin(pitchRad);
-            double depth = ry * Math.sin(pitchRad) + rz * Math.cos(pitchRad) + DISTANCE * zoom;
+            double cy = dy * Math.cos(pitchRad) - rz * Math.sin(pitchRad) + panV;
+            double depth = dy * Math.sin(pitchRad) + rz * Math.cos(pitchRad) + DISTANCE * zoom;
+            rx += panU;
             double focal = (y1 - y0) * 0.5D / StrictMath.tan(StrictMath.toRadians(FOV) * 0.5D);
             double sx = (x0 + x1) * 0.5D + rx * focal / depth;
             double sy = (y0 + y1) * 0.5D - cy * focal / depth;

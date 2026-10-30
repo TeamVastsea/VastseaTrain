@@ -68,12 +68,14 @@ public record BlueprintSettings(int length, RailGauge gauge, TrackBed bed, boole
         return TrackLayout.BLOCK_SPAN;
     }
 
-    /** 沿线方块数（直线：段数；弯道：覆盖的格数）。不含两侧支撑块。 */
+    /** 直线轨道沿线的方块数，不含两侧支撑块。 */
     public int totalBlocks() {
-        if (isCurve()) {
-            return CurvePlan.estimateBlocks(curveRadius);
-        }
         return length * TrackLayout.BLOCK_SPAN;
+    }
+
+    /** 弯道沿中心线摆放的模型实例估算数。 */
+    public int estimatedCurvePieces() {
+        return CurvePlan.estimatePieces(curveRadius);
     }
 
     public CompoundTag save() {

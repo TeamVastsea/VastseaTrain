@@ -45,7 +45,7 @@ import java.util.function.Function;
  *     <li><b>平移方向</b>：{@code translation} 在朝向旋转之后叠加，四个朝向平移方向一致。</li>
  * </ul>
  * 坐标约定：美术 OBJ 以模型为原点；最终顶点 = {@code Rot(朝向) · p + translation}，
- * 即 {@code translation} 就是“模型原点落在方块局部坐标里的位置”，{@code [0.5, 0.5, 0.5]} 表示方块中心。
+ * 即 {@code translation} 就是“模型原点落在方块局部坐标里的位置”，{@code [0.5, 0.0, 0.5]} 表示水平居中且不做垂直平移。
  */
 public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> {
     /** 顶点格式 {@code BLOCK}：位置(3) 颜色(1) UV(2) 光照(1) 法线(1) 填充(1) = 9 个 int，前 8 个有效。 */

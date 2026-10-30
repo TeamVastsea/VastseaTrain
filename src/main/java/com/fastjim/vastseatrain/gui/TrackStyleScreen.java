@@ -8,7 +8,6 @@ import com.fastjim.vastseatrain.track.RailStyle;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
@@ -22,12 +21,10 @@ import java.util.List;
  * 点“复位视角”回到默认角度。选中的外观立即生效（只影响之后新铺设的轨道），
  * 点“完成”或按 Esc 返回蓝图界面。
  * <p>
- * 布局全部按<b>当前窗口尺寸</b>现算（设计尺寸 560 × 210 只是最小尺寸），
- * 所有坐标直接使用 GUI 的坐标系，不做额外的整体缩放，因此与游戏自带的界面缩放（自动/小/中/大）
- * 叠加后仍然对得上：画在哪、点在哪完全一致。
+ * 布局按窗口尺寸现算；无法容纳最小布局时，面板、按钮、预览与鼠标坐标同步缩放。
  */
-public class TrackStyleScreen extends Screen {
-    /** 设计尺寸：窗口再小也至少按这个尺寸排版，超出部分允许裁切。 */
+public class TrackStyleScreen extends AdaptiveScreen {
+    /** 设计尺寸；窗口较小时由 {@link AdaptiveScreen} 整体缩放。 */
     private static final int DESIGN_WIDTH = 560;
     private static final int DESIGN_HEIGHT = 210;
     private static final int MARGIN = 6;
@@ -57,7 +54,7 @@ public class TrackStyleScreen extends Screen {
     private List<Face> floor = List.of();
 
     public TrackStyleScreen(TrackBlueprintScreen parent, RailStyle selected) {
-        super(Component.translatable("screen.vastseatrain.styles"));
+        super(Component.translatable("screen.vastseatrain.styles"), DESIGN_WIDTH, DESIGN_HEIGHT);
         this.parent = parent;
         this.selected = selected == null ? RailStyle.STANDARD : selected;
     }
@@ -94,12 +91,14 @@ public class TrackStyleScreen extends Screen {
         rebuildGeometry();
     }
 
-    /** 按当前窗口尺寸排版：窗口变大时面板跟着变大，但不超过设计尺寸太多。 */
+    /** 按自适应后的逻辑视口排版。 */
     private void layout() {
-        int contentWidth = Math.max(DESIGN_WIDTH, Math.min(width - MARGIN * 2, 760));
-        int contentHeight = Math.max(DESIGN_HEIGHT, Math.min(height - MARGIN * 2, 300));
-        left = (width - contentWidth) / 2;
-        top = (height - contentHeight) / 2;
+        int logicalWidth = logicalWidth();
+        int logicalHeight = logicalHeight();
+        int contentWidth = Math.min(logicalWidth - MARGIN * 2, 760);
+        int contentHeight = Math.min(logicalHeight - MARGIN * 2, 300);
+        left = (logicalWidth - contentWidth) / 2;
+        top = (logicalHeight - contentHeight) / 2;
         listWidth = Math.min(LIST_WIDTH, contentWidth / 3);
         previewLeft = left + listWidth + GAP;
         previewWidth = left + contentWidth - previewLeft;
@@ -156,6 +155,8 @@ public class TrackStyleScreen extends Screen {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
+        mouseX = logicalCoordinate(mouseX);
+        mouseY = logicalCoordinate(mouseY);
         if ((button == 0 || button == 1) && overPreview(mouseX, mouseY)) {
             dragMode = button == 0 ? 1 : 2;
             lastMouseX = mouseX;
@@ -178,15 +179,17 @@ public class TrackStyleScreen extends Screen {
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (dragMode != 0 && camera != null) {
             // 用“上一次位置到当前位置”的屏幕位移：与界面缩放、帧缓冲缩放无关
-            double dx = mouseX - lastMouseX;
-            double dy = mouseY - lastMouseY;
+            double logicalX = logicalCoordinate(mouseX);
+            double logicalY = logicalCoordinate(mouseY);
+            double dx = logicalX - lastMouseX;
+            double dy = logicalY - lastMouseY;
             if (dragMode == 1) {
                 camera.dragRotate(dx, dy);
             } else {
                 camera.dragPan(dx, dy);
             }
-            lastMouseX = mouseX;
-            lastMouseY = mouseY;
+            lastMouseX = logicalX;
+            lastMouseY = logicalY;
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
@@ -194,18 +197,22 @@ public class TrackStyleScreen extends Screen {
 
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
-        lastMouseX = mouseX;
-        lastMouseY = mouseY;
+        lastMouseX = logicalCoordinate(mouseX);
+        lastMouseY = logicalCoordinate(mouseY);
         super.mouseMoved(mouseX, mouseY);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        double screenX = mouseX;
+        double screenY = mouseY;
+        mouseX = logicalCoordinate(mouseX);
+        mouseY = logicalCoordinate(mouseY);
         if (camera != null && overPreview(mouseX, mouseY)) {
             camera.dragZoom(delta);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(screenX, screenY, delta);
     }
 
     @Override
@@ -227,6 +234,10 @@ public class TrackStyleScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
+        beginScaledContent(graphics);
+        double scale = uiScale();
+        mouseX = (int) (mouseX / scale);
+        mouseY = (int) (mouseY / scale);
 
         panel(graphics, left, listWidth);
         panel(graphics, previewLeft, previewWidth);
@@ -249,7 +260,8 @@ public class TrackStyleScreen extends Screen {
 
         // 3D 预览
         if (geometry != null && !geometry.faces().isEmpty() && camera != null) {
-            graphics.enableScissor(camera.x0, camera.y0, camera.x1, camera.y1);
+            graphics.enableScissor((int) (camera.x0 * scale), (int) (camera.y0 * scale),
+                    (int) (camera.x1 * scale), (int) (camera.y1 * scale));
             RailPreviewRenderer.draw(graphics, geometry.faces(), floor, camera, 1.0F);
             graphics.disableScissor();
             graphics.drawString(font, Component.translatable("gui.vastseatrain.style.hint"),
@@ -260,13 +272,13 @@ public class TrackStyleScreen extends Screen {
         }
 
         super.render(graphics, mouseX, mouseY, partialTick);
+        endScaledContent(graphics);
     }
 
     /**
      * 面板背景。
      * <p>
-     * 面板是纯色半透明，直接按屏幕坐标画，不经过任何整体缩放——这样面板边缘、阴影都与按钮的
-     * 位置严丝合缝。
+     * 面板与按钮共用自适应缩放后的逻辑坐标，边缘保持对齐。
      */
     private void panel(GuiGraphics graphics, int x, int width) {
         graphics.fill(x, previewTop(), x + width, panelBottom, 0xC0101018);

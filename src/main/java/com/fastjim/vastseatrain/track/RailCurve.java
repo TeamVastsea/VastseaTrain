@@ -210,10 +210,10 @@ public final class RailCurve {
     /**
      * 一份模型的摆放：绕 Y 轴旋转角的余弦/正弦，以及模型原点在方块局部坐标里的位置。
      * <p>
-     * 渲染公式（{@code p} 是模型原始顶点，原点垂直居中）：
+     * 渲染公式（{@code p} 是未经平移的 OBJ 原始顶点）：
      * <pre>
      *   x' = cos · p.x − sin · p.z + originX
-     *   y' = p.y + 0.5
+     *   y' = p.y
      *   z' = sin · p.x + cos · p.z + originZ
      * </pre>
      */

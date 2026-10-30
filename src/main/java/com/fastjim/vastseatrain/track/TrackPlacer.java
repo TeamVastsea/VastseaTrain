@@ -83,7 +83,7 @@ public final class TrackPlacer {
     /**
      * 90° 弯道：沿弧线逐份摆放整份模型，每格一个 {@code rail_curve} 方块。
      * <p>
-     * 一格可能叠多份模型（急弯处补缝），所以先按格子汇总，再一次性写进方块实体。
+     * 一格可能有多份模型实例（急弯时相邻采样点落在同格），先按格子汇总，再一次性写进方块实体。
      */
     private static Component placeCurve(ServerLevel level, BlockPos origin, Direction dir,
                                         BlueprintSettings settings) {

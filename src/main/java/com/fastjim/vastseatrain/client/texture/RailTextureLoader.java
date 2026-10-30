@@ -95,7 +95,7 @@ public final class RailTextureLoader implements ITextureAtlasSpriteLoader {
         return null;
     }
 
-    /** 把 ARGB 图逐像素写进 NativeImage（尺寸已经对齐）。 */
+    /** 把 Java ARGB 图逐像素写进 NativeImage；Minecraft 的像素整数使用 ABGR 通道顺序。 */
     private static void copyInto(BufferedImage image, NativeImage target) {
         int width = target.getWidth();
         int height = target.getHeight();
@@ -103,7 +103,9 @@ public final class RailTextureLoader implements ITextureAtlasSpriteLoader {
         for (int y = 0; y < height; y++) {
             image.getRGB(0, y, width, 1, row, 0, width);
             for (int x = 0; x < width; x++) {
-                target.setPixelRGBA(x, y, row[x]);
+                int argb = row[x];
+                int abgr = (argb & 0xFF00FF00) | ((argb >>> 16) & 0xFF) | ((argb & 0xFF) << 16);
+                target.setPixelRGBA(x, y, abgr);
             }
         }
     }

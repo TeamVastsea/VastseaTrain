@@ -21,7 +21,7 @@ import java.util.List;
  * 而方块模型只在区块烘焙时生成一次。所以把每份模型的旋转角与格内原点写进方块实体，客户端
  * {@code RailCurveBakedModel} 在区块烘焙时取用（一次烘焙后缓存进区块网格，逐帧不再重算）。
  * <p>
- * 一格可能叠多份：急弯处补缝的模型会和相邻的模型落在同一格里。
+ * 一格可能保存多份：等弧长采样在急弯处会让多个模型实例落入同一格。
  * 数据全部由服务端铺设时算好（见 {@code CurvePlan}），客户端不解算曲线、不需要额外网络包。
  */
 public class RailCurveBlockEntity extends BlockEntity {

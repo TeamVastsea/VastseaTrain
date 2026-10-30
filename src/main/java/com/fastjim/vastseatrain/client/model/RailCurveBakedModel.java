@@ -22,7 +22,6 @@ import net.minecraftforge.client.model.data.ModelProperty;
 import net.minecraftforge.client.model.pipeline.QuadBakingVertexConsumer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,10 +38,10 @@ import java.util.Map;
  * 与直道相比，只是把模型原点挪到格内的指定位置，并绕 Y 轴转过切线角度：
  * <pre>
  *   x' = cos · p.x − sin · p.z + originX
- *   y' = p.y + 0.5
+ *   y' = p.y
  *   z' = sin · p.x + cos · p.z + originZ
  * </pre>
- * 一格可能叠多份模型（急弯补缝），各自按自己的角度与原点变换。
+ * 一格可能保存多份模型（急弯时多个采样点落在同一方块），各自按角度与原点变换。
  * 模型本身一个顶点都不改（满长度、满宽度），所以钢轨不会被切断；
  * 相邻条带在弯道内侧自然重叠、外侧的间隙由 3 格宽的道床盖住。
  */
@@ -52,26 +51,23 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
     /** 每个弯道格的外观（旧存档没有时会变成空，按默认外观渲染）。 */
     public static final ModelProperty<RailStyle> STYLE = new ModelProperty<>();
 
-    /** 一套外观的弯道面数据（模型原点 + 面）。 */
-    public record StyleFaces(Vector3f origin, List<RailObjGeometry.Face> faces) {
+    /** 一套外观的弯道面数据。 */
+    public record StyleFaces(List<RailObjGeometry.Face> faces) {
     }
 
-    private final Vector3f origin;
     private final List<RailObjGeometry.Face> faces;
-    /** 其它外观的面数据；本方块对应外观（默认外观）用上面的 {@link #origin}/{@link #faces}。 */
+    /** 其它外观的面数据；默认外观使用上面的 {@link #faces}。 */
     private final Map<RailStyle, StyleFaces> styles;
     private final boolean ambientOcclusion;
 
-    public RailCurveBakedModel(BakedModel straight, Vector3f origin,
-                               List<RailObjGeometry.Face> faces, boolean ambientOcclusion) {
-        this(straight, origin, faces, Map.of(), ambientOcclusion);
+    public RailCurveBakedModel(BakedModel straight, List<RailObjGeometry.Face> faces, boolean ambientOcclusion) {
+        this(straight, faces, Map.of(), ambientOcclusion);
     }
 
-    public RailCurveBakedModel(BakedModel straight, Vector3f origin,
-                               List<RailObjGeometry.Face> faces, Map<RailStyle, StyleFaces> styles,
+    public RailCurveBakedModel(BakedModel straight, List<RailObjGeometry.Face> faces,
+                               Map<RailStyle, StyleFaces> styles,
                                boolean ambientOcclusion) {
         super(straight);
-        this.origin = origin;
         this.faces = faces;
         this.styles = styles;
         this.ambientOcclusion = ambientOcclusion;
@@ -114,13 +110,12 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         }
         RailStyle style = data.get(STYLE);
         StyleFaces source = style == null ? null : styles.get(style);
-        Vector3f usedOrigin = source == null ? origin : source.origin();
         List<RailObjGeometry.Face> usedFaces = source == null ? faces : source.faces();
         List<BakedQuad> quads = new ArrayList<>(usedFaces.size() * strips.size());
         for (Entry strip : strips) {
             RailCurve.Transform transform = strip.transform();
             for (RailObjGeometry.Face face : usedFaces) {
-                BakedQuad quad = build(face, transform, usedOrigin);
+                BakedQuad quad = build(face, transform);
                 if (quad != null) {
                     quads.add(quad);
                 }
@@ -131,7 +126,7 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
 
     /** 把一个三角面按摆放参数变换后写成 {@link BakedQuad}（第 4 角与第 3 角重合）。 */
     @Nullable
-    private BakedQuad build(RailObjGeometry.Face face, RailCurve.Transform transform, Vector3f origin) {
+    private BakedQuad build(RailObjGeometry.Face face, RailCurve.Transform transform) {
         float[] p = face.position();
         int count = face.vertexCount();
         if (count < 3) {
@@ -145,9 +140,9 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         float originX = transform.originX();
         float originZ = transform.originZ();
         for (int i = 0; i < count; i++) {
-            float x = p[i * 3] + origin.x();
-            float y = p[i * 3 + 1] + origin.y();
-            float z = p[i * 3 + 2] + origin.z();
+            float x = p[i * 3];
+            float y = p[i * 3 + 1];
+            float z = p[i * 3 + 2];
             xs[i] = cos * x - sin * z + originX;
             ys[i] = y;
             zs[i] = sin * x + cos * z + originZ;

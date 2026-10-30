@@ -13,6 +13,7 @@ import net.minecraft.client.resources.model.ModelBaker;
 import net.minecraft.client.resources.model.ModelState;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraftforge.client.model.geometry.IGeometryBakingContext;
 import net.minecraftforge.client.model.geometry.IUnbakedGeometry;
 
@@ -35,21 +36,23 @@ import java.util.function.Function;
  */
 public final class RailCurveGeometry implements IUnbakedGeometry<RailCurveGeometry> {
     private final RailObjGeometry geometry;
+    private final JsonObject rootJson;
     /** 其它外观的弯道根模型 JSON：外观 → JSON。烘焙时一次性转成面。 */
     private final Map<RailStyle, JsonObject> others;
 
-    public RailCurveGeometry(RailObjGeometry geometry) {
-        this(geometry, Map.of());
+    public RailCurveGeometry(RailObjGeometry geometry, JsonObject rootJson) {
+        this(geometry, rootJson, Map.of());
     }
 
-    private RailCurveGeometry(RailObjGeometry geometry, Map<RailStyle, JsonObject> others) {
+    private RailCurveGeometry(RailObjGeometry geometry, JsonObject rootJson, Map<RailStyle, JsonObject> others) {
         this.geometry = geometry;
+        this.rootJson = rootJson;
         this.others = others;
     }
 
     /** 附上“其它外观的弯道 JSON”（由 {@link RailCurveObjLoader} 在解析后调用）。 */
     public RailCurveGeometry withStyles(Map<RailStyle, JsonObject> otherJson) {
-        return new RailCurveGeometry(geometry, otherJson);
+        return new RailCurveGeometry(geometry, rootJson, otherJson);
     }
 
     @Override
@@ -60,7 +63,7 @@ public final class RailCurveGeometry implements IUnbakedGeometry<RailCurveGeomet
         // 所以这里用单位变换烘焙一次，避免 blockstate 的旋转被算两遍。
         BakedModel straight = geometry.bake(context, baker, spriteGetter, new ModelState() { }, overrides, modelLocation);
         List<RailObjGeometry.Face> faces = geometry.toFaces(
-                name -> spriteGetter.apply(context.getMaterial(name.startsWith("#") ? name.substring(1) : name)));
+                name -> spriteGetter.apply(material(rootJson, name)));
 
         RailObjLoader loader = new RailObjLoader();
         JsonDeserializationContext deserialization = new JsonDeserializationContext() {
@@ -72,10 +75,23 @@ public final class RailCurveGeometry implements IUnbakedGeometry<RailCurveGeomet
         Map<RailStyle, RailCurveBakedModel.StyleFaces> styles = new EnumMap<>(RailStyle.class);
         for (Map.Entry<RailStyle, JsonObject> entry : others.entrySet()) {
             RailObjGeometry other = loader.parse(entry.getValue(), deserialization);
-            styles.put(entry.getKey(), new RailCurveBakedModel.StyleFaces(other.origin(), other.toFaces(
-                    name -> spriteGetter.apply(context.getMaterial(name.startsWith("#") ? name.substring(1) : name)))));
+            styles.put(entry.getKey(), new RailCurveBakedModel.StyleFaces(other.toFaces(
+                    name -> spriteGetter.apply(material(entry.getValue(), name)))));
         }
-        return new RailCurveBakedModel(straight, geometry.origin(), faces, styles, context.useAmbientOcclusion());
+        return new RailCurveBakedModel(straight, faces, styles, context.useAmbientOcclusion());
+    }
+
+    private static Material material(JsonObject root, String reference) {
+        String texture = reference;
+        if (reference.startsWith("#")) {
+            JsonObject textures = root.getAsJsonObject("textures");
+            com.google.gson.JsonElement value = textures == null ? null : textures.get(reference.substring(1));
+            if (value == null || !value.isJsonPrimitive()) {
+                throw new IllegalStateException("弯道模型缺少贴图键 " + reference);
+            }
+            texture = value.getAsString();
+        }
+        return new Material(InventoryMenu.BLOCK_ATLAS, ResourceLocation.parse(texture));
     }
 
     // ------------------------------------------------------------------ 其它外观的 JSON

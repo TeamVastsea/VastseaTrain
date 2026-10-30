@@ -93,7 +93,7 @@ public class TrackBlueprintItem extends Item {
                             settings.curveRadius(),
                             Component.translatable(settings.curveLeft()
                                     ? "message.vastseatrain.curve_left" : "message.vastseatrain.curve_right"),
-                            settings.totalBlocks())
+                            settings.estimatedCurvePieces())
                     : Component.translatable("message.vastseatrain.placed", settings.length(),
                             settings.style().getDisplayName());
             serverPlayer.displayClientMessage(success.copy().withStyle(ChatFormatting.GREEN), true);

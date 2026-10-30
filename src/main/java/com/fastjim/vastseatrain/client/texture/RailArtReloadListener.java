@@ -1,6 +1,7 @@
 package com.fastjim.vastseatrain.client.texture;
 
 import com.fastjim.vastseatrain.VastseaTrain;
+import com.fastjim.vastseatrain.client.render.RailPreviewGeometry;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
@@ -38,6 +39,7 @@ public final class RailArtReloadListener extends SimplePreparableReloadListener<
 
     @Override
     protected void apply(Map<String, Long> files, ResourceManager resourceManager, ProfilerFiller profiler) {
+        RailPreviewGeometry.invalidate();
         lastScan = Map.copyOf(files);
         VastseaTrain.LOGGER.info("美术目录贴图：{} 个来源文件（assets/<命名空间>/{}）",
                 files.size(), RailArtSource.SOURCE_DIR);
