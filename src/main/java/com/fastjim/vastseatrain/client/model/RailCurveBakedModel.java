@@ -52,23 +52,26 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
     public static final ModelProperty<RailStyle> STYLE = new ModelProperty<>();
 
     /** 一套外观的弯道面数据。 */
-    public record StyleFaces(List<RailObjGeometry.Face> faces) {
+    public record StyleFaces(List<RailObjGeometry.Face> faces, boolean shadeQuads) {
     }
 
     private final List<RailObjGeometry.Face> faces;
+    private final boolean shadeQuads;
     /** 其它外观的面数据；默认外观使用上面的 {@link #faces}。 */
     private final Map<RailStyle, StyleFaces> styles;
     private final boolean ambientOcclusion;
 
-    public RailCurveBakedModel(BakedModel straight, List<RailObjGeometry.Face> faces, boolean ambientOcclusion) {
-        this(straight, faces, Map.of(), ambientOcclusion);
+    public RailCurveBakedModel(BakedModel straight, List<RailObjGeometry.Face> faces,
+                               boolean shadeQuads, boolean ambientOcclusion) {
+        this(straight, faces, shadeQuads, Map.of(), ambientOcclusion);
     }
 
     public RailCurveBakedModel(BakedModel straight, List<RailObjGeometry.Face> faces,
-                               Map<RailStyle, StyleFaces> styles,
+                               boolean shadeQuads, Map<RailStyle, StyleFaces> styles,
                                boolean ambientOcclusion) {
         super(straight);
         this.faces = faces;
+        this.shadeQuads = shadeQuads;
         this.styles = styles;
         this.ambientOcclusion = ambientOcclusion;
     }
@@ -108,14 +111,15 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         if (strips == null || strips.isEmpty()) {
             return List.of();
         }
-        RailStyle style = data.get(STYLE);
-        StyleFaces source = style == null ? null : styles.get(style);
-        List<RailObjGeometry.Face> usedFaces = source == null ? faces : source.faces();
-        List<BakedQuad> quads = new ArrayList<>(usedFaces.size() * strips.size());
+        List<BakedQuad> quads = new ArrayList<>(faces.size() * strips.size());
         for (Entry strip : strips) {
+            RailStyle style = strip.style() == null ? data.get(STYLE) : strip.style();
+            StyleFaces source = style == null ? null : styles.get(style);
+            List<RailObjGeometry.Face> usedFaces = source == null ? faces : source.faces();
+            boolean usedShadeQuads = source == null ? shadeQuads : source.shadeQuads();
             RailCurve.Transform transform = strip.transform();
             for (RailObjGeometry.Face face : usedFaces) {
-                BakedQuad quad = build(face, transform);
+                BakedQuad quad = build(face, transform, usedShadeQuads);
                 if (quad != null) {
                     quads.add(quad);
                 }
@@ -126,7 +130,7 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
 
     /** 把一个三角面按摆放参数变换后写成 {@link BakedQuad}（第 4 角与第 3 角重合）。 */
     @Nullable
-    private BakedQuad build(RailObjGeometry.Face face, RailCurve.Transform transform) {
+    private BakedQuad build(RailObjGeometry.Face face, RailCurve.Transform transform, boolean shade) {
         float[] p = face.position();
         int count = face.vertexCount();
         if (count < 3) {
@@ -163,8 +167,9 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         TextureAtlasSprite sprite = face.sprite();
         buffer.setSprite(sprite);
         buffer.setDirection(Direction.getNearest(nx, ny, nz));
-        buffer.setShade(true);
-        buffer.setHasAmbientOcclusion(ambientOcclusion);
+        buffer.setShade(shade);
+        // Match RailObjGeometry: custom faces use directional shade, not block-neighbor AO.
+        buffer.setHasAmbientOcclusion(false);
         for (int corner = 0; corner < 4; corner++) {
             int index = Math.min(corner, count - 1);
             buffer.vertex(xs[index], ys[index], zs[index]);

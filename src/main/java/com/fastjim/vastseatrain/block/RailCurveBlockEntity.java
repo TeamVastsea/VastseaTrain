@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 弯道上一个方块实体：保存“这一格里叠着的那几份轨道模型各自怎么摆”。
@@ -32,14 +33,40 @@ public class RailCurveBlockEntity extends BlockEntity {
         /** 模型原点在方块局部坐标里的位置（0..1）。 */
         public float originX = 0.5F;
         public float originZ = 0.5F;
+        private RailStyle style;
+        private UUID segmentId;
 
         public Entry() {
         }
 
         public Entry(float angle, float originX, float originZ) {
+            this(angle, originX, originZ, null, null);
+        }
+
+        public Entry(float angle, float originX, float originZ, RailStyle style, UUID segmentId) {
             this.angle = angle;
             this.originX = originX;
             this.originZ = originZ;
+            this.style = style;
+            this.segmentId = segmentId;
+        }
+
+        public RailStyle style() {
+            return style;
+        }
+
+        public UUID segmentId() {
+            return segmentId;
+        }
+
+        public Entry withMetadata(RailStyle fallbackStyle, UUID fallbackSegmentId) {
+            return new Entry(angle, originX, originZ,
+                    style == null ? fallbackStyle : style,
+                    segmentId == null ? fallbackSegmentId : segmentId);
+        }
+
+        public Entry copy() {
+            return new Entry(angle, originX, originZ, style, segmentId);
         }
 
         public RailCurve.Transform transform() {
@@ -66,9 +93,23 @@ public class RailCurveBlockEntity extends BlockEntity {
         this.radius = radius;
         this.left = left;
         this.style = style == null ? RailStyle.STANDARD : style;
+        notifyPlacementChanged();
+    }
+
+    public void removeSegment(UUID segmentId, boolean removeLegacyEntries) {
+        entries.removeIf(entry -> segmentId.equals(entry.segmentId())
+                || removeLegacyEntries && entry.segmentId() == null);
+        notifyPlacementChanged();
+    }
+
+    public void notifyPlacementChanged() {
         setChanged();
-        if (level != null && level.isClientSide) {
+        if (level == null) return;
+        if (level.isClientSide) {
             requestModelDataUpdate();
+        } else {
+            BlockState state = getBlockState();
+            level.sendBlockUpdated(worldPosition, state, state, net.minecraft.world.level.block.Block.UPDATE_ALL);
         }
     }
 
@@ -99,6 +140,8 @@ public class RailCurveBlockEntity extends BlockEntity {
             one.putFloat("Angle", entry.angle);
             one.putFloat("OriginX", entry.originX);
             one.putFloat("OriginZ", entry.originZ);
+            if (entry.style() != null) one.putString("Style", entry.style().getSerializedName());
+            if (entry.segmentId() != null) one.putUUID("Segment", entry.segmentId());
             list.add(one);
         }
         tag.put("Strips", list);
@@ -114,7 +157,11 @@ public class RailCurveBlockEntity extends BlockEntity {
         ListTag list = tag.getList("Strips", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) {
             CompoundTag one = list.getCompound(i);
-            entries.add(new Entry(one.getFloat("Angle"), one.getFloat("OriginX"), one.getFloat("OriginZ")));
+            RailStyle entryStyle = one.contains("Style")
+                    ? RailStyle.byName(one.getString("Style")) : null;
+            UUID segmentId = one.hasUUID("Segment") ? one.getUUID("Segment") : null;
+            entries.add(new Entry(one.getFloat("Angle"), one.getFloat("OriginX"), one.getFloat("OriginZ"),
+                    entryStyle, segmentId));
         }
         radius = tag.getInt("Radius");
         left = tag.getBoolean("Left");

@@ -648,16 +648,12 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
     private List<BakedQuad> buildQuads(Triangle source, TextureAtlasSprite sprite,
                                        Transformation rotation, boolean rotate) {
         Vector3f normal = faceNormal(source);
-        // 面的朝向由几何绕序决定。三角形统一按“正面”上报，不要用 getNearest 得到的斜向方向：
-        // 渲染器会按这个方向做朝向判断，斜向会被当成背对镜头而整面不画。
-        Direction forward = Direction.getNearest(normal.x(), normal.y(), normal.z());
-        if (forward == null) {
-            forward = Direction.UP;
-        }
         Vector3f rotatedNormal = new Vector3f(normal);
         if (rotate) {
             rotation.transformNormal(rotatedNormal);
         }
+        // Face direction drives vanilla block shading and must follow the blockstate rotation too.
+        Direction forward = Direction.getNearest(rotatedNormal.x(), rotatedNormal.y(), rotatedNormal.z());
         BakedQuad quad = makeQuad(source, sprite, forward, rotatedNormal, rotation, rotate);
         return quad == null ? List.of() : List.of(quad);
     }

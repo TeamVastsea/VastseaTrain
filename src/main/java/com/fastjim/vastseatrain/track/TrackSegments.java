@@ -11,7 +11,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,10 +27,10 @@ import java.util.UUID;
 public class TrackSegments extends SavedData {
     private static final String DATA_NAME = "vastseatrain_track_segments";
 
-    /** 方块位置 → 所属段 ID。 */
-    private final Map<BlockPos, UUID> byPos = new HashMap<>();
-    /** 段 ID → 该段包含的全部方块位置。 */
-    private final Map<UUID, List<BlockPos>> bySegment = new HashMap<>();
+    /** 段 ID → 该段包含的全部方块位置；多个段可以共用同一位置。 */
+    private final Map<UUID, List<BlockPos>> bySegment = new LinkedHashMap<>();
+    /** 方块位置 → 按铺设顺序排列的轨段 ID。 */
+    private final Map<BlockPos, List<UUID>> byPosition = new LinkedHashMap<>();
 
     public static TrackSegments get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(
@@ -40,27 +41,45 @@ public class TrackSegments extends SavedData {
 
     /** 把一组方块登记为同一段轨道。 */
     public void addSegment(UUID segmentId, List<BlockPos> positions) {
-        List<BlockPos> list = new ArrayList<>(positions.size());
+        LinkedHashSet<BlockPos> unique = new LinkedHashSet<>();
         for (BlockPos pos : positions) {
-            BlockPos immutable = pos.immutable();
-            UUID previous = byPos.put(immutable, segmentId);
-            if (previous != null && !previous.equals(segmentId)) {
-                removeFromSegment(previous, immutable);
-            }
-            list.add(immutable);
+            unique.add(pos.immutable());
         }
-        bySegment.computeIfAbsent(segmentId, id -> new ArrayList<>()).addAll(list);
+        List<BlockPos> previous = bySegment.get(segmentId);
+        if (previous != null) {
+            removeOwnership(segmentId, previous);
+        }
+        bySegment.put(segmentId, List.copyOf(unique));
+        for (BlockPos pos : unique) {
+            List<UUID> owners = byPosition.computeIfAbsent(pos, key -> new ArrayList<>());
+            owners.remove(segmentId);
+            owners.add(segmentId);
+        }
         setDirty();
     }
 
-    /** 方块所在段的 ID，没有归属时返回 null。 */
+    /** 返回最近铺设且经过该格的轨道段；没有归属时返回 null。 */
     public UUID segmentAt(BlockPos pos) {
-        return byPos.get(pos);
+        List<UUID> owners = byPosition.get(pos);
+        return owners == null || owners.isEmpty() ? null : owners.get(owners.size() - 1);
     }
 
     /** 该位置是否属于某一段轨道。 */
     public boolean isTracked(BlockPos pos) {
-        return byPos.containsKey(pos);
+        return segmentAt(pos) != null;
+    }
+
+    private boolean hasSegmentAt(BlockPos pos) {
+        return isTracked(pos);
+    }
+
+    private void removeOwnership(UUID segmentId, List<BlockPos> positions) {
+        for (BlockPos pos : positions) {
+            List<UUID> owners = byPosition.get(pos);
+            if (owners == null) continue;
+            owners.remove(segmentId);
+            if (owners.isEmpty()) byPosition.remove(pos);
+        }
     }
 
     /** 该段包含的全部方块（可能已被其他途径移除，调用方需自行检查世界状态）。 */
@@ -71,23 +90,20 @@ public class TrackSegments extends SavedData {
 
     /** 方块被移除后同步记录；段内已没有方块时删除整段。 */
     public void forget(BlockPos pos) {
-        UUID segmentId = byPos.remove(pos);
-        if (segmentId == null) {
-            return;
+        List<UUID> owners = byPosition.remove(pos);
+        if (owners == null) return;
+        for (UUID owner : owners) {
+            List<BlockPos> positions = bySegment.get(owner);
+            if (positions == null) continue;
+            List<BlockPos> remaining = new ArrayList<>(positions);
+            remaining.remove(pos);
+            if (remaining.isEmpty()) {
+                bySegment.remove(owner);
+            } else {
+                bySegment.put(owner, List.copyOf(remaining));
+            }
         }
-        removeFromSegment(segmentId, pos);
         setDirty();
-    }
-
-    private void removeFromSegment(UUID segmentId, BlockPos pos) {
-        List<BlockPos> list = bySegment.get(segmentId);
-        if (list == null) {
-            return;
-        }
-        list.remove(pos);
-        if (list.isEmpty()) {
-            bySegment.remove(segmentId);
-        }
     }
 
     /**
@@ -98,11 +114,21 @@ public class TrackSegments extends SavedData {
     public int removeSegment(ServerLevel level, UUID segmentId) {
         List<BlockPos> positions = new ArrayList<>(memberPositions(segmentId));
         bySegment.remove(segmentId);
+        removeOwnership(segmentId, positions);
         int removed = 0;
         for (BlockPos pos : positions) {
-            byPos.remove(pos);
             BlockState state = level.getBlockState(pos);
-            if (VTBlocks.isTrack(state.getBlock())) {
+            if (state.getBlock() instanceof com.fastjim.vastseatrain.block.RailCurveBlock
+                    && level.getBlockEntity(pos) instanceof com.fastjim.vastseatrain.block.RailCurveBlockEntity curve) {
+                boolean removeLegacyEntries = !hasSegmentAt(pos);
+                curve.removeSegment(segmentId, removeLegacyEntries);
+                if (curve.entries().isEmpty()) {
+                    level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                    removed++;
+                } else {
+                    curve.notifyPlacementChanged();
+                }
+            } else if (VTBlocks.isTrack(state.getBlock()) && !hasSegmentAt(pos)) {
                 level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
                 removed++;
             }

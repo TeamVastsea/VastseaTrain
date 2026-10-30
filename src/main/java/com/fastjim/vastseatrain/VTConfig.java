@@ -3,31 +3,30 @@ package com.fastjim.vastseatrain;
 import net.minecraftforge.common.ForgeConfigSpec;
 
 /**
- * 模组配置。目前只有弯道半径范围：
+ * 模组配置：轨道最大铺设长度与弯道最小半径。
  * <ul>
- *     <li>最小值/最大值限制界面与指令可输入的半径，代码本身不设硬上限；</li>
- *     <li>超过与性能警告线（默认 256）时界面会提示段数，避免一次铺出上千格。</li>
+ *     <li>{@code curve.maxRadius} 同时作为直道最大段数与弯道最大半径；</li>
+ *     <li>弯道半径还受最小半径限制；</li>
+ *     <li>模型实例超过 256 和 512 时，蓝图界面分别显示黄色和红色性能警告。</li>
  * </ul>
  */
 public final class VTConfig {
     public static final ForgeConfigSpec SPEC;
 
     private static final ForgeConfigSpec.IntValue CURVE_MIN_RADIUS;
-    private static final ForgeConfigSpec.IntValue CURVE_MAX_RADIUS;
-    private static final ForgeConfigSpec.IntValue CURVE_WARN_RADIUS;
+    private static final ForgeConfigSpec.IntValue MAX_PLACEMENT;
+    public static final int PERFORMANCE_WARNING_THRESHOLD = 256;
+    public static final int PERFORMANCE_CRITICAL_THRESHOLD = 512;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
-        builder.comment("Track curve settings").push("curve");
+        builder.comment("Track placement settings").push("curve");
         CURVE_MIN_RADIUS = builder
                 .comment("Minimum radius of a 90 degree curve, in blocks.")
                 .defineInRange("minRadius", 10, 3, 100000);
-        CURVE_MAX_RADIUS = builder
-                .comment("Maximum radius of a 90 degree curve, in blocks.")
+        MAX_PLACEMENT = builder
+                .comment("Maximum straight length in segments and maximum curve radius in blocks.")
                 .defineInRange("maxRadius", 1024, 10, 100000);
-        CURVE_WARN_RADIUS = builder
-                .comment("Radii above this value show a performance warning in the blueprint screen.")
-                .defineInRange("warnRadius", 256, 1, 100000);
         builder.pop();
         SPEC = builder.build();
     }
@@ -36,20 +35,23 @@ public final class VTConfig {
     }
 
     public static int minRadius() {
-        return CURVE_MIN_RADIUS.get();
+        return Math.min(CURVE_MIN_RADIUS.get(), maxPlacement());
+    }
+
+    /** 直道段数与弯道半径共用的最大铺设上限。 */
+    public static int maxPlacement() {
+        return MAX_PLACEMENT.get();
     }
 
     public static int maxRadius() {
-        return Math.max(minRadius(), CURVE_MAX_RADIUS.get());
+        return maxPlacement();
     }
 
-    public static int warnRadius() {
-        return CURVE_WARN_RADIUS.get();
-    }
-
-    /** 半径是否超过性能警告线。 */
-    public static boolean needsWarning(int radius) {
-        return radius > warnRadius();
+    /** 0 = no warning, 1 = warning, 2 = critical warning. */
+    public static int performanceWarningLevel(int estimatedModelPieces) {
+        if (estimatedModelPieces > PERFORMANCE_CRITICAL_THRESHOLD) return 2;
+        if (estimatedModelPieces > PERFORMANCE_WARNING_THRESHOLD) return 1;
+        return 0;
     }
 
     /**

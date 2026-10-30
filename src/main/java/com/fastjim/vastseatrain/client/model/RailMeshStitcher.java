@@ -17,7 +17,7 @@ import java.util.Map;
  * <p>
  * 本类是纯计算，不依赖 Minecraft 类，便于用真实 OBJ 离线验证。
  */
-final class RailMeshStitcher {
+public final class RailMeshStitcher {
     private RailMeshStitcher() {
     }
 
@@ -29,25 +29,25 @@ final class RailMeshStitcher {
      * <p>
      * {@link #vertices} 每 5 个 float 是一个顶点：x, y, z, u, v；{@link #indices} 每 3 个 int 是一个三角形。
      */
-    record Patch(float[] vertices, int[] indices) {
-        int vertexCount() {
+    public record Patch(float[] vertices, int[] indices) {
+        public int vertexCount() {
             return vertices.length / 5;
         }
 
-        int triangleCount() {
+        public int triangleCount() {
             return indices.length / 3;
         }
     }
 
     /** 拼接统计，仅用于日志。 */
-    record Result(List<Patch> patches, int sourceTriangles, int outputTriangles) {
+    public record Result(List<Patch> patches, int sourceTriangles, int outputTriangles) {
     }
 
     /**
      * @param data      扁平三角面数据，每个顶点 5 个 float（x, y, z, u, v），每个三角形 15 个 float
      * @param triangles 三角面数
      */
-    static Result stitch(float[] data, int triangles) {
+    public static Result stitch(float[] data, int triangles) {
         int vertexCount = triangles * 3;
         // 位置 + UV 完全相同的顶点视为同一个顶点
         Map<String, Integer> unique = new HashMap<>(vertexCount * 2);

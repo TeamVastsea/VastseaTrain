@@ -3,6 +3,7 @@ package com.fastjim.vastseatrain.client.render;
 import com.fastjim.vastseatrain.VastseaTrain;
 import com.fastjim.vastseatrain.client.render.RailPreviewRenderer.Face;
 import com.fastjim.vastseatrain.client.render.RailPreviewRenderer.Mode;
+import com.fastjim.vastseatrain.client.model.RailMeshStitcher;
 import com.fastjim.vastseatrain.track.RailStyle;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -28,7 +29,7 @@ import java.util.Map;
  * 界面 3D 预览用的模型数据。
  * <p>
  * 为什么单独解析而不是复用烘焙好的方块模型：已烘焙模型的顶点里已经没有 UV、文件信息也被丢掉了，
- * 而界面不需要离屏渲染目标，只需要顶点 + 贴图坐标，直接读美术文件最简单、也最好调试。
+ * 界面需要保留 OBJ 顶点与贴图坐标，因此直接读取美术文件构造独立的预览几何。
  * <p>
  * UV 处理与游戏内加载器保持一致：材质贴图引用解析成图集贴图，三角面按 UV 整数格切块，
  * 每块用完整的 {@code 0..1} 贴图坐标——否则界面里会像 {@code forge:obj} 那样出现花屏。
@@ -130,6 +131,7 @@ public final class RailPreviewGeometry {
 
         List<Vector3f> positions = new ArrayList<>();
         List<float[]> texCoords = new ArrayList<>();
+        Map<String, List<Triangle>> materialTriangles = new LinkedHashMap<>();
         String material = null;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                 resource(ResourceLocation.parse(modelPath)).open(), StandardCharsets.US_ASCII))) {
@@ -154,25 +156,8 @@ public final class RailPreviewGeometry {
                         if (ref == null) {
                             continue;
                         }
-                        TextureAtlasSprite sprite = sprite(ref, textureRefs);
                         for (Triangle triangle : triangulate(parts, positions, texCoords)) {
-                            for (Triangle piece : tile(triangle)) {
-                                Face face = toFace(piece, sprite, originX, originY, originZ, 0xFFFFFF);
-                                if (face == null) {
-                                    continue;
-                                }
-                                faces.add(face);
-                                for (int i = 0; i < 3; i++) {
-                                    minX = Math.min(minX, face.x()[i]);
-                                    maxX = Math.max(maxX, face.x()[i]);
-                                    minY = Math.min(minY, face.y()[i]);
-                                    maxY = Math.max(maxY, face.y()[i]);
-                                    minZ = Math.min(minZ, face.z()[i]);
-                                    maxZ = Math.max(maxZ, face.z()[i]);
-                                }
-                                spriteCounts.computeIfAbsent(directionOf(face), key -> new HashMap<>())
-                                        .merge(sprite, 1, Integer::sum);
-                            }
+                            materialTriangles.computeIfAbsent(material, key -> new ArrayList<>()).add(triangle);
                         }
                     }
                     default -> {
@@ -182,6 +167,30 @@ public final class RailPreviewGeometry {
             }
         } catch (Exception e) {
             throw new IllegalStateException("解析预览模型失败：" + modelPath, e);
+        }
+
+        for (Map.Entry<String, List<Triangle>> entry : materialTriangles.entrySet()) {
+            String ref = materialTextures.get(entry.getKey());
+            TextureAtlasSprite sprite = sprite(ref, textureRefs);
+            for (Triangle triangle : stitch(entry.getValue())) {
+                for (Triangle piece : tile(triangle)) {
+                    Face face = toFace(piece, sprite, originX, originY, originZ, 0xFFFFFF);
+                    if (face == null) {
+                        continue;
+                    }
+                    faces.add(face);
+                    for (int i = 0; i < 3; i++) {
+                        minX = Math.min(minX, face.x()[i]);
+                        maxX = Math.max(maxX, face.x()[i]);
+                        minY = Math.min(minY, face.y()[i]);
+                        maxY = Math.max(maxY, face.y()[i]);
+                        minZ = Math.min(minZ, face.z()[i]);
+                        maxZ = Math.max(maxZ, face.z()[i]);
+                    }
+                    spriteCounts.computeIfAbsent(directionOf(face), key -> new HashMap<>())
+                            .merge(sprite, 1, Integer::sum);
+                }
+            }
         }
 
         Map<Direction6, TextureAtlasSprite> sprites = new EnumMap<>(Direction6.class);
@@ -250,6 +259,42 @@ public final class RailPreviewGeometry {
     // ------------------------------------------------------------------ 三角面处理
 
     private record Triangle(Vector3f[] position, float[] u, float[] v) {
+    }
+
+    private static List<Triangle> stitch(List<Triangle> triangles) {
+        float[] data = new float[triangles.size() * 15];
+        for (int t = 0; t < triangles.size(); t++) {
+            Triangle triangle = triangles.get(t);
+            for (int i = 0; i < 3; i++) {
+                int base = (t * 3 + i) * 5;
+                data[base] = triangle.position()[i].x;
+                data[base + 1] = triangle.position()[i].y;
+                data[base + 2] = triangle.position()[i].z;
+                data[base + 3] = triangle.u()[i];
+                data[base + 4] = triangle.v()[i];
+            }
+        }
+
+        List<Triangle> result = new ArrayList<>(triangles.size());
+        for (RailMeshStitcher.Patch patch : RailMeshStitcher.stitch(data, triangles.size()).patches()) {
+            float[] vertices = patch.vertices();
+            int[] indices = patch.indices();
+            for (int i = 0; i < indices.length; i += 3) {
+                int a = indices[i];
+                int b = indices[i + 1];
+                int c = indices[i + 2];
+                result.add(new Triangle(
+                        new Vector3f[]{position(vertices, a), position(vertices, b), position(vertices, c)},
+                        new float[]{vertices[a * 5 + 3], vertices[b * 5 + 3], vertices[c * 5 + 3]},
+                        new float[]{vertices[a * 5 + 4], vertices[b * 5 + 4], vertices[c * 5 + 4]}));
+            }
+        }
+        return result;
+    }
+
+    private static Vector3f position(float[] vertices, int index) {
+        int base = index * 5;
+        return new Vector3f(vertices[base], vertices[base + 1], vertices[base + 2]);
     }
 
     private static List<Triangle> triangulate(String[] parts, List<Vector3f> positions, List<float[]> texCoords) {

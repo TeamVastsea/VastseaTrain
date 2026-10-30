@@ -8,6 +8,8 @@ import net.minecraft.network.chat.Component;
 abstract class AdaptiveScreen extends Screen {
     private final int minWidth;
     private final int minHeight;
+    private boolean savedHideGui;
+    private boolean hideGuiCaptured;
 
     protected AdaptiveScreen(Component title, int minWidth, int minHeight) {
         super(title);
@@ -39,6 +41,26 @@ abstract class AdaptiveScreen extends Screen {
 
     protected final double logicalCoordinate(double value) {
         return value / uiScale();
+    }
+
+    protected final void hideHud() {
+        if (minecraft == null) {
+            return;
+        }
+        if (!hideGuiCaptured) {
+            savedHideGui = minecraft.options.hideGui;
+            hideGuiCaptured = true;
+        }
+        minecraft.options.hideGui = true;
+    }
+
+    @Override
+    public void removed() {
+        if (minecraft != null && hideGuiCaptured) {
+            minecraft.options.hideGui = savedHideGui;
+            hideGuiCaptured = false;
+        }
+        super.removed();
     }
 
     @Override

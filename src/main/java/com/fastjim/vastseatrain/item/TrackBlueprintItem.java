@@ -1,7 +1,9 @@
 package com.fastjim.vastseatrain.item;
 
 import com.fastjim.vastseatrain.track.BlueprintSettings;
+import com.fastjim.vastseatrain.track.DiagonalSolver;
 import com.fastjim.vastseatrain.track.TrackPlacer;
+import com.fastjim.vastseatrain.registry.VTBlocks;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -28,7 +30,7 @@ import java.util.function.Consumer;
  *     <li>右键地面：按当前参数沿玩家朝向铺设直线轨道。</li>
  * </ul>
  * 交互链路只有一条：世界修改只在本物品的 {@link #useOn} 服务端分支执行，
- * 客户端不额外发包，避免同一次右键被铺设两遍。首版只实现直线。
+ * 客户端不额外发包，避免同一次右键被铺设两遍。
  */
 public class TrackBlueprintItem extends Item {
     private static Consumer<ItemStack> screenOpener = stack -> {
@@ -72,11 +74,19 @@ public class TrackBlueprintItem extends Item {
             return InteractionResult.SUCCESS;
         }
 
-        BlockPos origin = context.getClickedPos().above();
-        // 向前铺：从点击位置沿玩家视线的水平方向延伸，而不是反向（背对玩家）
-        Direction dir = context.getHorizontalDirection();
-
         BlueprintSettings settings = BlueprintSettings.from(stack);
+        BlockPos clickedPos = context.getClickedPos();
+        BlockPos origin = VTBlocks.isTrack(level.getBlockState(clickedPos).getBlock())
+                ? clickedPos : clickedPos.above();
+        Direction dir;
+        if (!settings.isCurve()) {
+            net.minecraft.world.phys.Vec3 look = player.getLookAngle();
+            dir = DiagonalSolver.facingFromLook(look.x, look.z, settings.lineAngle(),
+                    context.getHorizontalDirection());
+        } else {
+            // 弯道继续使用原有的四向朝向判定。
+            dir = context.getHorizontalDirection();
+        }
 
         if (level.isClientSide) {
             // 客户端只做动画反馈；世界修改完全由服务端分支处理
@@ -94,7 +104,15 @@ public class TrackBlueprintItem extends Item {
                             Component.translatable(settings.curveLeft()
                                     ? "message.vastseatrain.curve_left" : "message.vastseatrain.curve_right"),
                             settings.estimatedCurvePieces())
-                    : Component.translatable("message.vastseatrain.placed", settings.length(),
+                    : settings.lineAngle() != 0
+                    ? Component.translatable("message.vastseatrain.placed_line",
+                            settings.lineAngle(),
+                            String.format(java.util.Locale.ROOT, "%.2f", settings.lineSolution().actualDegrees()),
+                            settings.lineMultiplier(),
+                            settings.lineGridSpan(),
+                            String.format(java.util.Locale.ROOT, "%.2f", settings.lineLength()),
+                            settings.estimatedLinePieces())
+                    : Component.translatable("message.vastseatrain.placed", settings.lineMultiplier(),
                             settings.style().getDisplayName());
             serverPlayer.displayClientMessage(success.copy().withStyle(ChatFormatting.GREEN), true);
         }
@@ -110,8 +128,16 @@ public class TrackBlueprintItem extends Item {
             tooltip.add(Component.translatable(settings.curveLeft()
                             ? "message.vastseatrain.curve_left" : "message.vastseatrain.curve_right")
                     .withStyle(ChatFormatting.GRAY));
+        } else if (settings.lineAngle() != 0) {
+            tooltip.add(Component.translatable("tooltip.vastseatrain.line",
+                    settings.lineAngle(),
+                    String.format(java.util.Locale.ROOT, "%.2f", settings.lineSolution().actualDegrees()),
+                    settings.lineMultiplier(),
+                    settings.lineGridSpan(),
+                    String.format(java.util.Locale.ROOT, "%.2f", settings.lineLength()))
+                    .withStyle(ChatFormatting.GRAY));
         } else {
-            tooltip.add(Component.translatable("tooltip.vastseatrain.length", settings.length())
+            tooltip.add(Component.translatable("tooltip.vastseatrain.length", settings.lineMultiplier())
                     .withStyle(ChatFormatting.GRAY));
         }
         tooltip.add(Component.translatable("tooltip.vastseatrain.gauge", settings.gauge().getDisplayName()).withStyle(ChatFormatting.GRAY));

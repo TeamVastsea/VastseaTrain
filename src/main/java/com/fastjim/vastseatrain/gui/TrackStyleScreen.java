@@ -3,7 +3,6 @@ package com.fastjim.vastseatrain.gui;
 import com.fastjim.vastseatrain.client.render.RailPreviewGeometry;
 import com.fastjim.vastseatrain.client.render.RailPreviewRenderer;
 import com.fastjim.vastseatrain.client.render.RailPreviewRenderer.Camera;
-import com.fastjim.vastseatrain.client.render.RailPreviewRenderer.Face;
 import com.fastjim.vastseatrain.track.RailStyle;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.GuiGraphics;
@@ -25,10 +24,10 @@ import java.util.List;
  */
 public class TrackStyleScreen extends AdaptiveScreen {
     /** 设计尺寸；窗口较小时由 {@link AdaptiveScreen} 整体缩放。 */
-    private static final int DESIGN_WIDTH = 560;
+    private static final int MIN_WIDTH = 380;
     private static final int DESIGN_HEIGHT = 210;
     private static final int MARGIN = 6;
-    private static final int PANEL_TOP = 22;
+    private static final int PANEL_TOP = 32;
     private static final int LIST_WIDTH = 168;
     private static final int ROW_HEIGHT = 24;
     private static final int GAP = 8;
@@ -46,26 +45,23 @@ public class TrackStyleScreen extends AdaptiveScreen {
     private Camera camera;
     /** 当前拖拽模式：0 无、1 左键旋转、2 右键平移。 */
     private int dragMode;
-    private double lastMouseX;
-    private double lastMouseY;
 
     /** 当前预览的几何（切换选中项时换掉）。 */
     private RailPreviewGeometry.Geometry geometry;
-    private List<Face> floor = List.of();
-
     public TrackStyleScreen(TrackBlueprintScreen parent, RailStyle selected) {
-        super(Component.translatable("screen.vastseatrain.styles"), DESIGN_WIDTH, DESIGN_HEIGHT);
+        super(Component.translatable("screen.vastseatrain.styles"), MIN_WIDTH, DESIGN_HEIGHT);
         this.parent = parent;
         this.selected = selected == null ? RailStyle.STANDARD : selected;
     }
 
     @Override
     protected void init() {
+        hideHud();
         layout();
 
         int rowX = left + GAP;
         int rowWidth = listWidth - GAP * 2;
-        int rowY = previewTop() + GAP;
+        int rowY = previewTop() + 26;
         for (RailStyle style : RailStyle.values()) {
             RailStyle value = style;
             addRenderableWidget(Button.builder(style.getDisplayName(), b -> {
@@ -118,20 +114,16 @@ public class TrackStyleScreen extends AdaptiveScreen {
             geometry = null;
         }
         if (geometry == null || geometry.faces().isEmpty()) {
-            floor = List.of();
             return;
         }
         if (camera != null) {
-            // 模型已居中在原点、方块上表面为 y = 0：相机对准模型包围盒中心
-            camera.target = new Vec3(0.0D, (geometry.minY() + geometry.maxY()) * 0.5D, 0.0D);
+            camera.target = new Vec3(geometry.centerX(), (geometry.minY() + geometry.maxY()) * 0.5D,
+                    geometry.centerZ());
             camera.panU = 0.0D;
             camera.panV = 0.0D;
             // 模型越大，相机拉得越远，保证始终完整落在预览框里
-            camera.zoom = Mth.clamp(geometry.planLength() / 2.2D, 0.9D, 4.0D);
+            camera.setDefaultZoom(Mth.clamp(geometry.planLength() / 2.2D, 0.9D, 4.0D));
         }
-        float half = Math.max(0.5F, Math.max(geometry.maxX() - geometry.minX(),
-                geometry.maxZ() - geometry.minZ()) * 0.5F);
-        floor = RailPreviewRenderer.grassBlock(half);
     }
 
     /** 是否点在 3D 预览区内。 */
@@ -159,8 +151,6 @@ public class TrackStyleScreen extends AdaptiveScreen {
         mouseY = logicalCoordinate(mouseY);
         if ((button == 0 || button == 1) && overPreview(mouseX, mouseY)) {
             dragMode = button == 0 ? 1 : 2;
-            lastMouseX = mouseX;
-            lastMouseY = mouseY;
             return true;
         }
         return false;
@@ -178,28 +168,18 @@ public class TrackStyleScreen extends AdaptiveScreen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (dragMode != 0 && camera != null) {
-            // 用“上一次位置到当前位置”的屏幕位移：与界面缩放、帧缓冲缩放无关
-            double logicalX = logicalCoordinate(mouseX);
-            double logicalY = logicalCoordinate(mouseY);
-            double dx = logicalX - lastMouseX;
-            double dy = logicalY - lastMouseY;
+            // MouseHandler reports frame deltas after mouseMoved, which has already updated its current position.
+            double scale = uiScale();
+            double dx = dragX / scale;
+            double dy = dragY / scale;
             if (dragMode == 1) {
                 camera.dragRotate(dx, dy);
             } else {
                 camera.dragPan(dx, dy);
             }
-            lastMouseX = logicalX;
-            lastMouseY = logicalY;
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-
-    @Override
-    public void mouseMoved(double mouseX, double mouseY) {
-        lastMouseX = logicalCoordinate(mouseX);
-        lastMouseY = logicalCoordinate(mouseY);
-        super.mouseMoved(mouseX, mouseY);
     }
 
     @Override
@@ -239,30 +219,41 @@ public class TrackStyleScreen extends AdaptiveScreen {
         mouseX = (int) (mouseX / scale);
         mouseY = (int) (mouseY / scale);
 
-        panel(graphics, left, listWidth);
-        panel(graphics, previewLeft, previewWidth);
-        graphics.drawCenteredString(font, title, left + (listWidth + GAP + previewWidth) / 2, top + 6, 0xFFFFFF);
+        graphics.drawCenteredString(font, title, left + (listWidth + GAP + previewWidth) / 2, top + 3, 0xFFFFFF);
         int rowX = left + GAP;
+        int headerY = previewTop() + 7;
         graphics.drawString(font, Component.translatable("gui.vastseatrain.style.list"),
-                rowX, previewTop() + GAP - 12, 0xFFD27F);
+                rowX, headerY, 0xFFFFFF);
         graphics.drawString(font, Component.translatable("gui.vastseatrain.style.selected",
-                selected.getDisplayName()), previewLeft + GAP, previewTop() + GAP - 12, 0xFFD27F);
+                selected.getDisplayName()), previewLeft + GAP, headerY, 0xFFFFFF);
+        graphics.fill(left, previewTop() + 20, left + listWidth, previewTop() + 21, 0x806A6A78);
+        graphics.fill(previewLeft, previewTop() + 20, previewLeft + previewWidth, previewTop() + 21,
+                0x806A6A78);
+        graphics.fill(previewLeft - GAP / 2, previewTop(), previewLeft - GAP / 2 + 1, panelBottom,
+                0x605A5A66);
 
         // 列表高亮当前选中项（与按钮位置一致）
-        int rowY = previewTop() + GAP;
+        int rowY = previewTop() + 26;
         for (RailStyle style : RailStyle.values()) {
             if (style == selected) {
-                graphics.fill(rowX - 3, rowY - 2, rowX + listWidth - GAP * 2 + 3, rowY + 22, 0x40FFD27F);
-                graphics.fill(rowX - 3, rowY - 2, rowX - 1, rowY + 22, 0xFFFFD27F);
+                graphics.fill(rowX - 3, rowY - 2, rowX + listWidth - GAP * 2 + 3, rowY + 22, 0x405C7898);
+                graphics.fill(rowX - 3, rowY - 2, rowX - 1, rowY + 22, 0xFFD8D8E0);
             }
             rowY += ROW_HEIGHT;
         }
 
         // 3D 预览
         if (geometry != null && !geometry.faces().isEmpty() && camera != null) {
+            graphics.fill(previewLeft + 1, camera.y0, previewLeft + previewWidth - 1, panelBottom - 1,
+                    0xA0202228);
+            camera.setRenderScale(uiScale() * minecraft.getWindow().getGuiScale());
             graphics.enableScissor((int) (camera.x0 * scale), (int) (camera.y0 * scale),
                     (int) (camera.x1 * scale), (int) (camera.y1 * scale));
-            RailPreviewRenderer.draw(graphics, geometry.faces(), floor, camera, 1.0F);
+            double gridExtent = 128.0D + Math.abs(camera.panU) + Math.abs(camera.panV)
+                    + camera.zoom * 16.0D;
+            RailPreviewRenderer.drawGrid(graphics, camera, geometry.centerX(), geometry.centerZ(),
+                    RailPreviewRenderer.GROUND_Y - 0.025D, gridExtent);
+            RailPreviewRenderer.draw(graphics, geometry.faces(), camera, 1.0F);
             graphics.disableScissor();
             graphics.drawString(font, Component.translatable("gui.vastseatrain.style.hint"),
                     previewLeft + GAP, panelBottom - 14, 0xA0A0A0, false);
@@ -275,15 +266,10 @@ public class TrackStyleScreen extends AdaptiveScreen {
         endScaledContent(graphics);
     }
 
-    /**
-     * 面板背景。
-     * <p>
-     * 面板与按钮共用自适应缩放后的逻辑坐标，边缘保持对齐。
-     */
-    private void panel(GuiGraphics graphics, int x, int width) {
-        graphics.fill(x, previewTop(), x + width, panelBottom, 0xC0101018);
-        graphics.fill(x, previewTop(), x + width, previewTop() + 1, 0x80FFD27F);
-        graphics.fill(x, panelBottom - 1, x + width, panelBottom, 0x80FFD27F);
+    @Override
+    public void removed() {
+        RailPreviewRenderer.release();
+        super.removed();
     }
 
     /** 当前选择（供自检/调试）。 */

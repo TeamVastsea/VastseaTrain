@@ -5,6 +5,7 @@ import com.fastjim.vastseatrain.block.RailCurveBlock;
 import com.fastjim.vastseatrain.block.RailCurveBlockEntity;
 import com.fastjim.vastseatrain.registry.VTBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -24,10 +25,10 @@ import java.util.UUID;
  * 每格只放一个轨道方块（模型自身横跨 3 格宽，不再并排铺 3 条轨道）：
  * <ul>
  *     <li>直道：所选外观对应的直道方块，沿方向逐格前推；</li>
- *     <li>弯道：{@code rail_curve} 方块，位置由 {@link CurvePlan} 沿弧线算出，
+ *     <li>弯道与斜线：{@code rail_curve} 方块，位置由几何计划算出，
  *     每格的旋转角、格内偏移与外观写进方块实体，客户端按此摆放整份模型。</li>
  * </ul>
- * 直道与弯道在入口处共用同一个点（入口格中心），所以连续铺设时首尾相接。
+ * 直道、弯道与斜线在入口处共用同一个点（入口格中心），所以连续铺设时首尾相接。
  * <p>
  * 外观只对<b>本次铺设</b>生效：已经铺好的格子不会被改写。
  */
@@ -45,6 +46,9 @@ public final class TrackPlacer {
         if (settings.isCurve()) {
             return placeCurve(level, origin, dir, settings);
         }
+        if (settings.lineAngle() != 0) {
+            return placeDiagonal(level, origin, dir, settings);
+        }
         return placeStraight(level, origin, dir, settings);
     }
 
@@ -55,7 +59,7 @@ public final class TrackPlacer {
             return Component.translatable("message.vastseatrain.out_of_world", origin.getX(), origin.getZ());
         }
 
-        BlockPos[] positions = TrackLayout.footprint(origin, dir, settings.length());
+        BlockPos[] positions = TrackLayout.footprint(origin, dir, settings.lineMultiplier());
 
         for (BlockPos pos : positions) {
             Component failure = checkPlaceable(level, pos);
@@ -66,17 +70,23 @@ public final class TrackPlacer {
 
         Block railBlock = VTBlocks.byName(settings.style().blockName());
         BlockState rail = railBlock.defaultBlockState().setValue(RailBlock.FACING, dir);
+        TrackSegments segments = TrackSegments.get(level);
+        UUID segmentId = UUID.randomUUID();
 
         List<BlockPos> placed = new ArrayList<>(positions.length);
         for (BlockPos pos : positions) {
-            // 已有轨道格保持原样：外观切换只影响新铺的格子
-            if (!VTBlocks.isTrack(level.getBlockState(pos).getBlock())) {
+            BlockState existing = level.getBlockState(pos);
+            if (VTBlocks.isTrack(existing.getBlock())) {
+                List<RailCurveBlockEntity.Entry> entries = existingEntries(level, pos, segments);
+                entries.add(new RailCurveBlockEntity.Entry((float) angleForDirection(dir), 0.5F, 0.5F,
+                        settings.style(), segmentId));
+                setCurvePlacement(level, pos, dir, entries, 0, false, settings.style());
+            } else {
                 level.setBlock(pos, rail, Block.UPDATE_ALL);
             }
             placed.add(pos);
         }
-        // 整段登记进存档：后续破坏任意一格都会带动整段移除
-        TrackSegments.get(level).addSegment(UUID.randomUUID(), placed);
+        segments.addSegment(segmentId, placed);
         return null;
     }
 
@@ -88,7 +98,20 @@ public final class TrackPlacer {
     private static Component placeCurve(ServerLevel level, BlockPos origin, Direction dir,
                                         BlueprintSettings settings) {
         CurvePlan plan = CurvePlan.of(origin, dir, settings.curveLeft(), settings.curveRadius());
-        List<CurvePlan.Piece> pieces = plan.pieces();
+        return placeVariableGeometry(level, plan, settings, settings.curveRadius());
+    }
+
+    /** Grid-aligned diagonal sampled at intervals no longer than one block. */
+    private static Component placeDiagonal(ServerLevel level, BlockPos origin, Direction dir,
+                                           BlueprintSettings settings) {
+        DiagonalPlan plan = DiagonalPlan.of(origin, dir, settings.lineSolution(),
+                settings.lineMultiplier());
+        return placeVariableGeometry(level, plan, settings, 0);
+    }
+
+    private static Component placeVariableGeometry(ServerLevel level, TrackPlacementPlan plan,
+                                                   BlueprintSettings settings, int radius) {
+        List<? extends TrackPlacementPlan.Piece> pieces = plan.pieces();
 
         for (BlockPos pos : plan.positions()) {
             Component failure = checkPlaceable(level, pos);
@@ -98,26 +121,86 @@ public final class TrackPlacer {
         }
 
         Map<BlockPos, List<RailCurveBlockEntity.Entry>> byPos = new LinkedHashMap<>();
-        for (CurvePlan.Piece piece : pieces) {
+        Map<BlockPos, Direction> facingByPos = new LinkedHashMap<>();
+        TrackSegments segments = TrackSegments.get(level);
+        UUID segmentId = UUID.randomUUID();
+        for (TrackPlacementPlan.Piece piece : pieces) {
             byPos.computeIfAbsent(piece.pos(), key -> new ArrayList<>())
                     .add(new RailCurveBlockEntity.Entry(
-                            (float) piece.angle(), (float) piece.offsetX(), (float) piece.offsetZ()));
+                            (float) piece.angle(), (float) piece.offsetX(), (float) piece.offsetZ(),
+                            settings.style(), segmentId));
+            facingByPos.putIfAbsent(piece.pos(), piece.facing());
         }
 
         List<BlockPos> placed = new ArrayList<>(byPos.size());
         for (Map.Entry<BlockPos, List<RailCurveBlockEntity.Entry>> entry : byPos.entrySet()) {
             BlockPos pos = entry.getKey();
-            BlockState state = VTBlocks.RAIL_CURVE.get().defaultBlockState()
-                    .setValue(RailCurveBlock.FACING, plan.facingAt(pos));
-            level.setBlock(pos, state, Block.UPDATE_ALL);
-            BlockEntity entity = level.getBlockEntity(pos);
-            if (entity instanceof RailCurveBlockEntity curve) {
-                curve.setPlacement(entry.getValue(), plan.radius(), plan.left(), settings.style());
-            }
+            List<RailCurveBlockEntity.Entry> placement = existingEntries(level, pos, segments);
+            placement.addAll(entry.getValue());
+            setCurvePlacement(level, pos, facingByPos.get(pos), placement,
+                    radius, settings.curveLeft(), settings.style());
             placed.add(pos);
         }
-        TrackSegments.get(level).addSegment(UUID.randomUUID(), placed);
+        segments.addSegment(segmentId, placed);
         return null;
+    }
+
+    private static List<RailCurveBlockEntity.Entry> existingEntries(ServerLevel level, BlockPos pos,
+                                                                    TrackSegments segments) {
+        BlockState existing = level.getBlockState(pos);
+        if (!VTBlocks.isTrack(existing.getBlock())) {
+            return new ArrayList<>();
+        }
+
+        if (level.getBlockEntity(pos) instanceof RailCurveBlockEntity curve) {
+            List<RailCurveBlockEntity.Entry> entries = new ArrayList<>(curve.entries().size());
+            UUID owner = segments.segmentAt(pos);
+            if (owner == null && !curve.entries().isEmpty()) {
+                owner = UUID.randomUUID();
+                segments.addSegment(owner, List.of(pos));
+            }
+            for (RailCurveBlockEntity.Entry entry : curve.entries()) {
+                entries.add(entry.withMetadata(curve.style(), owner));
+            }
+            return entries;
+        }
+
+        UUID owner = segments.segmentAt(pos);
+        if (owner == null) {
+            owner = UUID.randomUUID();
+            segments.addSegment(owner, List.of(pos));
+        }
+        String blockName = BuiltInRegistries.BLOCK.getKey(existing.getBlock()).getPath();
+        RailStyle style = RailStyle.byBlockName(blockName);
+        Direction facing = existing.getValue(RailBlock.FACING);
+        return new ArrayList<>(List.of(new RailCurveBlockEntity.Entry(
+                (float) angleForDirection(facing), 0.5F, 0.5F, style, owner)));
+    }
+
+    private static void setCurvePlacement(ServerLevel level, BlockPos pos, Direction facing,
+                                          List<RailCurveBlockEntity.Entry> entries,
+                                          int radius, boolean left, RailStyle style) {
+        BlockState existing = level.getBlockState(pos);
+        if (!(existing.getBlock() instanceof RailCurveBlock)) {
+            BlockState curveState = VTBlocks.RAIL_CURVE.get().defaultBlockState()
+                    .setValue(RailCurveBlock.FACING, facing);
+            level.setBlock(pos, curveState, Block.UPDATE_ALL);
+        }
+        BlockEntity entity = level.getBlockEntity(pos);
+        if (entity instanceof RailCurveBlockEntity curve) {
+            curve.setPlacement(entries, radius, left, style);
+            level.sendBlockUpdated(pos, level.getBlockState(pos), level.getBlockState(pos), Block.UPDATE_ALL);
+        }
+    }
+
+    private static double angleForDirection(Direction direction) {
+        return switch (direction) {
+            case WEST -> 0.0D;
+            case NORTH -> Math.PI * 0.5D;
+            case EAST -> Math.PI;
+            case SOUTH -> Math.PI * 1.5D;
+            default -> 0.0D;
+        };
     }
 
     /**

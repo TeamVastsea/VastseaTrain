@@ -17,7 +17,7 @@ import java.util.Set;
  * <p>
  * 相比固定角度采样，等弧长采样可使模型沿弧线均匀衔接，避免模型起点分布忽疏忽密。
  */
-public final class CurvePlan {
+public final class CurvePlan implements TrackPlacementPlan {
     /**
      * 一份模型。
      *
@@ -29,7 +29,7 @@ public final class CurvePlan {
      * @param offsetZ 模型原点在方块局部坐标里的 Z（0..1）
      */
     public record Piece(BlockPos pos, Direction facing, double arc, double angle,
-                        double offsetX, double offsetZ) {
+                        double offsetX, double offsetZ) implements TrackPlacementPlan.Piece {
         /** 渲染参数。 */
         public RailCurve.Transform transform() {
             return new RailCurve.Transform(

@@ -37,7 +37,6 @@ public final class SegmentBreakHandler {
         }
 
         event.setCanceled(true);
-        level.removeBlock(event.getPos(), false);
         segments.removeSegment(level, segmentId);
     }
 

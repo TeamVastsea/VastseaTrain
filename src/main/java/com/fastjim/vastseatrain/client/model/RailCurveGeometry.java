@@ -76,9 +76,10 @@ public final class RailCurveGeometry implements IUnbakedGeometry<RailCurveGeomet
         for (Map.Entry<RailStyle, JsonObject> entry : others.entrySet()) {
             RailObjGeometry other = loader.parse(entry.getValue(), deserialization);
             styles.put(entry.getKey(), new RailCurveBakedModel.StyleFaces(other.toFaces(
-                    name -> spriteGetter.apply(material(entry.getValue(), name)))));
+                    name -> spriteGetter.apply(material(entry.getValue(), name))), other.shadeQuads()));
         }
-        return new RailCurveBakedModel(straight, faces, styles, context.useAmbientOcclusion());
+        return new RailCurveBakedModel(straight, faces, geometry.shadeQuads(), styles,
+                context.useAmbientOcclusion());
     }
 
     private static Material material(JsonObject root, String reference) {

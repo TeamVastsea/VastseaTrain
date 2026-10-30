@@ -143,7 +143,7 @@ pos = Rot(朝向) · p + translation
 - 轨距半宽 `RailCurve.HALF_GAUGE = 0.645` 格（由美术模型钢轨位置 `|x| ≈ 0.5..0.79` 实测）。
 - 左右转与出口方向都用坐标旋转计算，不用 `getClockWise` / `getCounterClockWise`
   （1.20.1 里这两个方法的**名字与方向相反**，按名字用会把左弯画成右弯）。
-- 半径范围在 `VTConfig` 里：`minRadius 10` / `maxRadius 1024`，超过 `warnRadius 256` 时界面会提示方块数。
+- 铺设上限与弯道范围在 `VTConfig` 里：`curve.maxRadius 1024` 同时限制直道段数和弯道半径，`curve.minRadius 10` 限制弯道最小半径；超过 `warnRadius 256` 时界面会提示模型实例数。
 
 ### 每格的数据
 
@@ -178,9 +178,51 @@ z' = sinθ · p.x + cosθ · p.z + originZ
 - 弯道方块 `rail_curve` 所有外观共用，外观名记在方块实体的 `Style` 上。
   `RailCurveObjLoader` 烘焙时会把**每一套外观**的弯道 JSON 都读进来，
   用直道加载器解析同一份 OBJ/MTL 得到通用面数据，渲染时按 `Style` 取用。
-- 外观表见 `track/RailStyle.java`。新增一套外观：美术文件放进 `rail/`，
-  补齐 `textures/block/rail/` 下的 PNG 副本、两个根模型 JSON 与 `*_mtl.mtl`，
-  在 `RailStyle` 加一个枚举项、在 `VTBlocks` 注册一个直道方块即可，界面与网络不用改。
+- 外观表见 `track/RailStyle.java`。下面列出新增一套外观实际涉及的美术资源、资源配置和注册代码。
+
+### 新增一套外观文件清单（以 `test3` 为例）
+
+下面假设新外观的直道方块注册名为 `rail_test3`，程序侧直道/弯道根模型名分别为 `rail_test3_core`、`rail_test3_curve_core`。这些名称由程序统一确定；美术交付 `test3.obj`、`test3.mtl` 和贴图即可，不要把程序配置放进美术目录。
+
+```text
+assets/vastseatrain/
+  models/block/rail/                         # 美术只读目录
+    test3.obj                                # 美术模型
+    test3.mtl                                # 美术导出的材质列表
+    <贴图名>.png|jpg|jpeg                    # MTL 引用的原图
+  models/block/rail_test3_core.json          # 程序：直道加载器、OBJ、材质与贴图映射
+  models/block/rail_test3_curve_core.json    # 程序：弯道加载器；也是本外观的独立配置
+  models/block/rail_test3_mtl.mtl            # 程序：与 test3.mtl 材质名对应的覆盖文件
+  blockstates/rail_test3.json                # 程序：直道方块四个朝向指向 rail_test3_core
+  blockstates/rail_curve.json                # 已有共享文件；通常不为新外观新增方块状态文件
+  textures/block/rail/<新贴图名>.png          # 仅新增图集贴图时需要：图集占位图
+  textures/block/rail/<新贴图名>.png.mcmeta   # 仅新增图集贴图时需要：rail_art 加载器声明
+  lang/zh_cn.json                            # 程序：方块、物品、外观显示名
+  lang/en_us.json                            # 程序：方块、物品、外观显示名
+  models/item/rail_test3.json                # 可拿取方块物品的物品模型（若提供物品）
+  textures/item/rail_test3.png               # 可拿取方块物品的图标（若提供物品）
+```
+
+#### 必需的模型资源配置
+
+- **两份根模型 JSON**：直道使用 `vastseatrain:rail_obj`，弯道使用 `vastseatrain:rail_curve_obj`；两者都指向 `models/block/rail/test3.obj` 和程序侧 `rail_test3_mtl.mtl`。各 JSON 的 `textures` 将 `#名称` 映射到 `vastseatrain:block/rail/<贴图名>`。四份既有根模型的 `transform.translation` 约定仍为 `[0.5, 0.0, 0.5]`；新增配置沿用同一约定，不改 OBJ 来补偿坐标。
+- **材质覆盖 MTL**：逐项复制美术 MTL 的 `newmtl` 名称及 OBJ `usemtl` 对应关系，把相对路径 `map_Kd file.png` 改成 `map_Kd #texture_name`。MTL 必须是 ASCII；不要让 Forge 直接用美术 MTL 的相对 `map_Kd` 路径。
+- **直道 blockstate**：新增方块要有自己的 `blockstates/rail_test3.json`，把 north/east/south/west 映射到新直道根模型并设置与其他直道相同的旋转。
+- **弯道 blockstate**：所有外观共用 `blockstates/rail_curve.json` 和 `rail_curve` 方块。新外观仍需独立的弯道根模型 JSON，并在 `RailStyle` 中提供它的资源名，供弯道模型加载器按外观读取。
+
+#### 程序注册与可选的物品资源
+
+要让外观出现在蓝图列表并参与铺设，程序需在 `track/RailStyle.java` 增加枚举项（外观 ID、直道/弯道根模型名、粒子贴图 ID、直道方块名），并在 `registry/VTBlocks.java` 注册对应直道方块。GUI 列表和网络使用外观枚举自动生成，不需要单独改 GUI 或网络代码。新增外观的语言键为 `style.vastseatrain.<外观ID>`，需要同时写入 `lang/zh_cn.json` 和 `lang/en_us.json`；方块的 `block.*` 名称也应补齐。
+
+蓝图铺设使用的直道方块不一定非要作为独立物品提供。若还要让玩家从创造物品栏单独拿取该方块，则还需在 `registry/VTItems.java` 注册 `BlockItem`，在 `registry/VTTabs.java` 加入物品，并增加 `models/item/<方块名>.json`、`textures/item/<方块名>.png` 和 `item.*` 语言键。曲线仍使用共用的 `rail_curve` 方块，不需为每种外观再注册一个曲线物品。
+
+#### 新贴图和 `test3` 当前用图
+
+OBJ 的材质通过程序侧 MTL 覆盖文件映射到纹理图集。若贴图名已经存在于 `textures/block/rail/` 的登记中，可以在根模型 JSON 复用对应的 `block/rail/<贴图名>` ID，无需重复建立占位 PNG 或 `.mcmeta`。若名称是新的，则需增加同名占位 PNG 与 `.png.mcmeta`，并在根模型 JSON 的 `textures` 中登记；`.mcmeta` 使用现有尺寸规则并声明 `forge.loader` 为 `vastseatrain:rail_art`。美术原图仍放在 `models/block/rail/`，PNG/JPG/JPEG 均可，加载器按 PNG、JPG、JPEG 顺序选择同名文件。
+
+当前 `test3.mtl` 引用 `concrete_silver.png`、`gray3.jpg`、`gray1.jpg`、`rail_sleeper_top.png` 和 `rail_fastener.png`。这些贴图名已在项目现有轨道贴图集中使用；接入时可复用相应的图集 ID，不必为 `test3` 再复制一组不同名字的占位资源。`test3` 仍需要自己的程序侧 MTL 覆盖和根模型 JSON 映射，因为 MTL 材质名称及其贴图分配属于该模型配置。
+
+简要分工：美术维护 `models/block/rail/` 内的 OBJ、MTL、贴图原图；程序维护该目录外的根模型 JSON、MTL 覆盖、blockstate、注册代码、语言、图集占位资源以及（若提供物品）物品图标和模型。资源重载（F3+T）可以检查贴图替换，但新增 blockstate、模型路径或注册项需要重新启动/重新构建以完整验证。
 
 ## 界面里的 3D 预览
 
