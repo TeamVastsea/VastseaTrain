@@ -73,14 +73,16 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         this.shadeQuads = shadeQuads;
     }
 
-    /** 一个 usemtl 段：同一材质的所有三角面。 */
+    /** 一个 OBJ 对象与材质组合：对象名用于区分左右钢轨。 */
     private static final class Mesh {
         /** 材质引用，形如 {@code #ballast}，由根模型 JSON 的 {@code textures} 解析。 */
         private final String texture;
+        private final String objectName;
         private final List<Triangle> triangles = new ArrayList<>();
 
-        private Mesh(String texture) {
+        private Mesh(String texture, String objectName) {
             this.texture = texture;
+            this.objectName = objectName;
         }
     }
 
@@ -158,6 +160,7 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
         List<float[]> texCoords = new ArrayList<>();
         Mesh currentMesh = null;
         String currentMaterial = null;
+        String currentObject = "";
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(resource.open(), StandardCharsets.US_ASCII))) {
@@ -169,6 +172,16 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
                 }
                 String[] parts = trimmed.split("\\s+");
                 switch (parts[0]) {
+                    case "o" -> {
+                        currentObject = parts.length > 1 ? parts[1] : "";
+                        if (currentMaterial != null) {
+                            String texture = materialTextures.get(currentMaterial);
+                            String objectName = currentObject;
+                            String meshName = currentMaterial;
+                            currentMesh = texture == null ? null : meshes.computeIfAbsent(
+                                    meshKey(objectName, meshName), key -> new Mesh(texture, objectName));
+                        }
+                    }
                     case "v" -> positions.add(new Vector3f(
                             Float.parseFloat(parts[1]),
                             Float.parseFloat(parts[2]),
@@ -184,9 +197,9 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
                         if (texture == null) {
                             currentMesh = null;
                         } else {
-                            // 同名材质在 OBJ 里会多次出现（美术按对象分段导出），这里复用同一个 Mesh，
-                            // 避免拆成多个材质段导致贴图/剔除设置被重复处理
-                            currentMesh = meshes.computeIfAbsent(currentMaterial, key -> new Mesh(texture));
+                            String objectName = currentObject;
+                            currentMesh = meshes.computeIfAbsent(meshKey(objectName, currentMaterial),
+                                    key -> new Mesh(texture, objectName));
                         }
                     }
                     case "f" -> {
@@ -194,14 +207,16 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
                             addFace(currentMesh, parts, positions, texCoords);
                         }
                     }
-                    default -> {
-                        // o / g / s / mtllib / vn / vc 等无需处理
-                    }
+                    default -> { }
                 }
             }
         } catch (Exception e) {
             throw new IllegalStateException("无法解析轨道模型 " + location, e);
         }
+    }
+
+    private static String meshKey(String objectName, String material) {
+        return objectName + '\u0000' + material;
     }
 
     private static void addFace(Mesh mesh, String[] parts, List<Vector3f> positions, List<float[]> texCoords) {
@@ -332,7 +347,9 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
      * 坐标是模型局部坐标（原点在段中心、前进方向 −X、宽度沿 Z），<b>没有</b>做平移与旋转；
      * 弯道模型在区块烘焙时按方块实体给出的角度与偏移现算世界位置。
      */
-    public record Face(TextureAtlasSprite sprite, float[] position, float[] u, float[] v) {
+    public enum Part { BED, LEFT_RAIL, RIGHT_RAIL }
+
+    public record Face(TextureAtlasSprite sprite, float[] position, float[] u, float[] v, Part part) {
         /** 顶点数（每 3 个 float 一个顶点）。 */
         public int vertexCount() {
             return position.length / 3;
@@ -372,11 +389,18 @@ public final class RailObjGeometry implements IUnbakedGeometry<RailObjGeometry> 
                                     piece.position()[0].x(), piece.position()[0].y(), piece.position()[0].z(),
                                     piece.position()[1].x(), piece.position()[1].y(), piece.position()[1].z(),
                                     piece.position()[2].x(), piece.position()[2].y(), piece.position()[2].z()},
-                            piece.u(), piece.v()));
+                            piece.u(), piece.v(), part(mesh.objectName)));
                 }
             }
         }
         return faces;
+    }
+
+    private static Part part(String objectName) {
+        String name = objectName.toLowerCase(java.util.Locale.ROOT);
+        if (name.contains("left_rail")) return Part.LEFT_RAIL;
+        if (name.contains("right_rail")) return Part.RIGHT_RAIL;
+        return Part.BED;
     }
 
     /** 模型原点在方块局部坐标里的位置（直道为方块中心）。 */

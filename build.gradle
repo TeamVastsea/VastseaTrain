@@ -117,6 +117,14 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+tasks.register('verifyCurveGeometry', JavaExec) {
+    group = 'verification'
+    description = 'Checks curve fitting, turn directions, and independent rail arc lengths.'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fastjim.vastseatrain.client.model.RailCurveGeometryProbe'
+}
+
 tasks.named('jar', Jar).configure {
     manifest {
         attributes([

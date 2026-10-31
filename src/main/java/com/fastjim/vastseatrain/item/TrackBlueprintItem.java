@@ -100,6 +100,7 @@ public class TrackBlueprintItem extends Item {
             }
             Component success = settings.isCurve()
                     ? Component.translatable("message.vastseatrain.placed_curve",
+                            settings.curveAngle(),
                             settings.curveRadius(),
                             Component.translatable(settings.curveLeft()
                                     ? "message.vastseatrain.curve_left" : "message.vastseatrain.curve_right"),
@@ -123,6 +124,8 @@ public class TrackBlueprintItem extends Item {
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         BlueprintSettings settings = BlueprintSettings.from(stack);
         if (settings.isCurve()) {
+            tooltip.add(Component.translatable("tooltip.vastseatrain.curve_angle", settings.curveAngle())
+                    .withStyle(ChatFormatting.GRAY));
             tooltip.add(Component.translatable("tooltip.vastseatrain.curve_radius", settings.curveRadius())
                     .withStyle(ChatFormatting.GRAY));
             tooltip.add(Component.translatable(settings.curveLeft()

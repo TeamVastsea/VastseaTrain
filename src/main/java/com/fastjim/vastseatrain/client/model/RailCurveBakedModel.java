@@ -119,7 +119,7 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
             boolean usedShadeQuads = source == null ? shadeQuads : source.shadeQuads();
             RailCurve.Transform transform = strip.transform();
             for (RailObjGeometry.Face face : usedFaces) {
-                BakedQuad quad = build(face, transform, usedShadeQuads);
+                BakedQuad quad = build(face, strip, transform, usedShadeQuads);
                 if (quad != null) {
                     quads.add(quad);
                 }
@@ -130,7 +130,8 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
 
     /** 把一个三角面按摆放参数变换后写成 {@link BakedQuad}（第 4 角与第 3 角重合）。 */
     @Nullable
-    private BakedQuad build(RailObjGeometry.Face face, RailCurve.Transform transform, boolean shade) {
+    private BakedQuad build(RailObjGeometry.Face face, Entry strip,
+                            RailCurve.Transform transform, boolean shade) {
         float[] p = face.position();
         int count = face.vertexCount();
         if (count < 3) {
@@ -143,13 +144,16 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
         float sin = transform.sin();
         float originX = transform.originX();
         float originZ = transform.originZ();
+        float[] fitted = new float[2];
+        double[] curveData = new double[6];
         for (int i = 0; i < count; i++) {
             float x = p[i * 3];
             float y = p[i * 3 + 1];
             float z = p[i * 3 + 2];
-            xs[i] = cos * x - sin * z + originX;
+            fitRail(face.part(), strip, x, z, fitted, curveData);
+            xs[i] = cos * fitted[0] - sin * fitted[1] + originX;
             ys[i] = y;
-            zs[i] = sin * x + cos * z + originZ;
+            zs[i] = sin * fitted[0] + cos * fitted[1] + originZ;
         }
         // 法线由旋转后的顶点重新算，面朝向（Direction）也跟着旋转，明暗才对得上
         float nx = (ys[1] - ys[0]) * (zs[2] - zs[0]) - (zs[1] - zs[0]) * (ys[2] - ys[0]);
@@ -180,6 +184,66 @@ public final class RailCurveBakedModel extends BakedModelWrapper<BakedModel> {
             buffer.endVertex();
         }
         return buffer.getQuad();
+    }
+
+    static void fitRail(RailObjGeometry.Part part, Entry strip, float x, float z,
+                        float[] out, double[] curveData) {
+        if (strip.curveRadius() <= 0 || part == RailObjGeometry.Part.BED) {
+            out[0] = x;
+            out[1] = z;
+            return;
+        }
+        double arc = strip.curveArc();
+        double radius = strip.curveRadius();
+        double total = strip.curveTotal();
+        fittedPoint(strip, arc, radius, total, curveData, 0);
+        fittedRailPoint(strip, arc, x, z, radius, total, curveData, 2);
+        double dx = curveData[2] - curveData[0];
+        double dz = curveData[3] - curveData[1];
+        double cos = Math.cos(strip.angle);
+        double sin = Math.sin(strip.angle);
+        out[0] = (float) (cos * dx + sin * dz);
+        out[1] = (float) (-sin * dx + cos * dz);
+    }
+
+    private static void fittedPoint(Entry strip, double arc, double radius, double total,
+                                    double[] out, int offset) {
+        double theta = arc / radius;
+        double t = total <= 0.0D ? 1.0D : Math.max(0.0D, Math.min(1.0D, arc / total));
+        double blend = t * t * (3.0D - 2.0D * t);
+        double advance = radius * Math.sin(theta) + strip.fitAdvance() * blend;
+        double inward = radius * (1.0D - Math.cos(theta)) + strip.fitInward() * blend;
+        double ex = directionX(strip.curveEntryAngle());
+        double ez = directionZ(strip.curveEntryAngle());
+        double ix = strip.curveLeft() ? ez : -ez;
+        double iz = strip.curveLeft() ? -ex : ex;
+        out[offset] = advance * ex + inward * ix;
+        out[offset + 1] = advance * ez + inward * iz;
+    }
+
+    private static void fittedRailPoint(Entry strip, double arc, double localX, double localZ,
+                                        double centerRadius, double total, double[] out, int offset) {
+        double radius = centerRadius + (strip.curveLeft() ? -localZ : localZ);
+        radius = Math.max(1.0E-6D, radius);
+        double theta = (arc - localX) / centerRadius;
+        double t = total <= 0.0D ? 1.0D : Math.max(0.0D, Math.min(1.0D, theta * centerRadius / total));
+        double blend = t * t * (3.0D - 2.0D * t);
+        double advance = radius * Math.sin(theta) + strip.fitAdvance() * blend;
+        double inward = centerRadius - radius * Math.cos(theta) + strip.fitInward() * blend;
+        double ex = directionX(strip.curveEntryAngle());
+        double ez = directionZ(strip.curveEntryAngle());
+        double ix = strip.curveLeft() ? ez : -ez;
+        double iz = strip.curveLeft() ? -ex : ex;
+        out[offset] = advance * ex + inward * ix;
+        out[offset + 1] = advance * ez + inward * iz;
+    }
+
+    private static double directionX(double baseAngle) {
+        return -Math.cos(baseAngle);
+    }
+
+    private static double directionZ(double baseAngle) {
+        return -Math.sin(baseAngle);
     }
 
     // ---- 以下属性全部沿用直道烘焙结果，保证弯道与直道的渲染层、贴图、GUI 表现一致 ----

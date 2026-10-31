@@ -35,6 +35,14 @@ public class RailCurveBlockEntity extends BlockEntity {
         public float originZ = 0.5F;
         private RailStyle style;
         private UUID segmentId;
+        private int curveRadius;
+        private float curveSweep;
+        private float curveArc;
+        private float fitAdvance;
+        private float fitInward;
+        private float curveTotal;
+        private boolean curveLeft;
+        private float curveEntryAngle;
 
         public Entry() {
         }
@@ -44,11 +52,26 @@ public class RailCurveBlockEntity extends BlockEntity {
         }
 
         public Entry(float angle, float originX, float originZ, RailStyle style, UUID segmentId) {
+            this(angle, originX, originZ, style, segmentId, 0, 0.0F, 0.0F,
+                    0.0F, 0.0F, 0.0F, false, angle);
+        }
+
+        public Entry(float angle, float originX, float originZ, RailStyle style, UUID segmentId,
+                      int curveRadius, float curveSweep, float curveArc, float fitAdvance,
+                     float fitInward, float curveTotal, boolean curveLeft, float curveEntryAngle) {
             this.angle = angle;
             this.originX = originX;
             this.originZ = originZ;
             this.style = style;
             this.segmentId = segmentId;
+            this.curveRadius = curveRadius;
+            this.curveSweep = curveSweep;
+            this.curveArc = curveArc;
+            this.fitAdvance = fitAdvance;
+            this.fitInward = fitInward;
+            this.curveTotal = curveTotal;
+            this.curveLeft = curveLeft;
+            this.curveEntryAngle = curveEntryAngle;
         }
 
         public RailStyle style() {
@@ -59,14 +82,26 @@ public class RailCurveBlockEntity extends BlockEntity {
             return segmentId;
         }
 
+        public int curveRadius() { return curveRadius; }
+        public float curveSweep() { return curveSweep; }
+        public float curveArc() { return curveArc; }
+        public float fitAdvance() { return fitAdvance; }
+        public float fitInward() { return fitInward; }
+        public float curveTotal() { return curveTotal; }
+        public boolean curveLeft() { return curveLeft; }
+        public float curveEntryAngle() { return curveEntryAngle; }
+
         public Entry withMetadata(RailStyle fallbackStyle, UUID fallbackSegmentId) {
             return new Entry(angle, originX, originZ,
                     style == null ? fallbackStyle : style,
-                    segmentId == null ? fallbackSegmentId : segmentId);
+                    segmentId == null ? fallbackSegmentId : segmentId,
+                    curveRadius, curveSweep, curveArc, fitAdvance, fitInward, curveTotal, curveLeft,
+                    curveEntryAngle);
         }
 
         public Entry copy() {
-            return new Entry(angle, originX, originZ, style, segmentId);
+            return new Entry(angle, originX, originZ, style, segmentId, curveRadius, curveSweep,
+                    curveArc, fitAdvance, fitInward, curveTotal, curveLeft, curveEntryAngle);
         }
 
         public RailCurve.Transform transform() {
@@ -140,6 +175,14 @@ public class RailCurveBlockEntity extends BlockEntity {
             one.putFloat("Angle", entry.angle);
             one.putFloat("OriginX", entry.originX);
             one.putFloat("OriginZ", entry.originZ);
+            one.putInt("CurveRadius", entry.curveRadius());
+            one.putFloat("CurveSweep", entry.curveSweep());
+            one.putFloat("CurveArc", entry.curveArc());
+            one.putFloat("FitAdvance", entry.fitAdvance());
+            one.putFloat("FitInward", entry.fitInward());
+            one.putFloat("CurveTotal", entry.curveTotal());
+            one.putBoolean("CurveLeft", entry.curveLeft());
+            one.putFloat("CurveEntryAngle", entry.curveEntryAngle());
             if (entry.style() != null) one.putString("Style", entry.style().getSerializedName());
             if (entry.segmentId() != null) one.putUUID("Segment", entry.segmentId());
             list.add(one);
@@ -161,7 +204,12 @@ public class RailCurveBlockEntity extends BlockEntity {
                     ? RailStyle.byName(one.getString("Style")) : null;
             UUID segmentId = one.hasUUID("Segment") ? one.getUUID("Segment") : null;
             entries.add(new Entry(one.getFloat("Angle"), one.getFloat("OriginX"), one.getFloat("OriginZ"),
-                    entryStyle, segmentId));
+                    entryStyle, segmentId, one.getInt("CurveRadius"), one.getFloat("CurveSweep"),
+                    one.getFloat("CurveArc"), one.getFloat("FitAdvance"), one.getFloat("FitInward"),
+                    one.getFloat("CurveTotal"), one.getBoolean("CurveLeft"),
+                    one.contains("CurveEntryAngle") ? one.getFloat("CurveEntryAngle")
+                            : one.contains("CurveBaseAngle") ? one.getFloat("CurveBaseAngle")
+                            : one.getFloat("Angle")));
         }
         radius = tag.getInt("Radius");
         left = tag.getBoolean("Left");

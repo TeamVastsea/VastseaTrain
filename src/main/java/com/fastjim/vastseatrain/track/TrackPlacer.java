@@ -91,14 +91,30 @@ public final class TrackPlacer {
     }
 
     /**
-     * 90° 弯道：沿弧线逐份摆放整份模型，每格一个 {@code rail_curve} 方块。
+     * 弯道：沿弧线逐份摆放整份模型，每格一个 {@code rail_curve} 方块。
      * <p>
      * 一格可能有多份模型实例（急弯时相邻采样点落在同格），先按格子汇总，再一次性写进方块实体。
      */
     private static Component placeCurve(ServerLevel level, BlockPos origin, Direction dir,
                                         BlueprintSettings settings) {
-        CurvePlan plan = CurvePlan.of(origin, dir, settings.curveLeft(), settings.curveRadius());
-        return placeVariableGeometry(level, plan, settings, settings.curveRadius());
+        CurvePlan plan;
+        try {
+            plan = CurvePlan.of(origin, dir, settings.curveLeft(), settings.curveRadius(),
+                    settings.curveAngle(), settings.curveFitTolerance());
+        } catch (IllegalArgumentException ignored) {
+            if (!com.fastjim.vastseatrain.VTConfig.curveEndpointMoves(
+                    settings.curveRadius(), settings.curveAngle())) {
+                return Component.translatable("message.vastseatrain.curve_endpoint_same");
+            }
+            return Component.translatable("message.vastseatrain.curve_fit_failed",
+                    String.format(java.util.Locale.ROOT, "%.2f", settings.curveFitDistance()),
+                    String.format(java.util.Locale.ROOT, "%.2f", settings.curveFitTolerance()));
+        }
+        if (plan.arcLength() > com.fastjim.vastseatrain.VTConfig.MAX_CURVE_ARC_LENGTH + 1.0E-8D) {
+            return Component.translatable("message.vastseatrain.curve_too_long",
+                    com.fastjim.vastseatrain.VTConfig.MAX_CURVE_ARC_LENGTH);
+        }
+        return placeVariableGeometry(level, plan, settings, plan.radius());
     }
 
     /** Grid-aligned diagonal sampled at intervals no longer than one block. */
@@ -128,7 +144,10 @@ public final class TrackPlacer {
             byPos.computeIfAbsent(piece.pos(), key -> new ArrayList<>())
                     .add(new RailCurveBlockEntity.Entry(
                             (float) piece.angle(), (float) piece.offsetX(), (float) piece.offsetZ(),
-                            settings.style(), segmentId));
+                            settings.style(), segmentId, piece.curveRadius(), (float) piece.curveSweep(),
+                            (float) piece.curveArc(), (float) piece.fitAdvance(), (float) piece.fitInward(),
+                            (float) (piece.curveRadius() * piece.curveSweep()), piece.curveLeft(),
+                            (float) piece.curveEntryAngle()));
             facingByPos.putIfAbsent(piece.pos(), piece.facing());
         }
 

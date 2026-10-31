@@ -36,6 +36,8 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
     private BlueprintSettings settings;
 
     private RadiusSlider radiusSlider;
+    private CurveValueSlider curveAngleSlider;
+    private CurveValueSlider curveFitSlider;
     private EditBox lineMultiplierBox;
     private EditBox lineAngleBox;
     private DiagonalAngleSlider lineAngleSlider;
@@ -103,9 +105,17 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
         });
         addRenderableWidget(lineAngleBox);
 
-        // 弯道模式保留半径滑条与转向控件。
-        radiusSlider = addRenderableWidget(new RadiusSlider(leftX, top + 62, innerWidth, 20,
-                settings.curveRadius(), value -> settings = settings.withCurveRadius(value)));
+        curveAngleSlider = addRenderableWidget(new CurveValueSlider(leftX, top + 52, innerWidth, 20,
+                1, 90, settings.curveAngle(), value -> {
+                    settings = settings.withCurveAngle(value);
+                    if (radiusSlider != null) radiusSlider.setAngle(settings.curveAngle(), settings.curveRadius());
+                }));
+
+        radiusSlider = addRenderableWidget(new RadiusSlider(leftX, top + 80, innerWidth, 20,
+                settings.curveAngle(), settings.curveRadius(), value -> settings = settings.withCurveRadius(value)));
+
+        curveFitSlider = addRenderableWidget(new CurveValueSlider(leftX, top + 142, innerWidth, 20,
+                0, 100, settings.curveFitPercent(), value -> settings = settings.withCurveFitPercent(value)));
 
         lineMultiplierBox = new EditBox(font, leftX, top + 100, innerWidth, 18, Component.empty());
         lineMultiplierBox.setValue(Integer.toString(settings.lineMultiplier()));
@@ -122,7 +132,7 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
         });
         addRenderableWidget(lineMultiplierBox);
 
-        turnButton = addRenderableWidget(new DirectionalButton(leftX, top + 104, innerWidth, 20,
+        turnButton = addRenderableWidget(new DirectionalButton(leftX, top + 108, innerWidth, 20,
                 turnLabel(), (b, direction) -> {
                     settings = settings.withCurveLeft(!settings.curveLeft());
                     b.setMessage(turnLabel());
@@ -130,7 +140,7 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
         turnButton.active = settings.isCurve();
         turnButton.visible = settings.isCurve();
 
-        gaugeButton = addRenderableWidget(new DirectionalButton(leftX, top + 148, innerWidth, 20,
+        gaugeButton = addRenderableWidget(new DirectionalButton(leftX, top + 166, innerWidth, 20,
                 gaugeLabel(), (b, direction) -> {
                     settings = settings.withGauge(cycle(settings.gauge(), direction));
                     b.setMessage(gaugeLabel());
@@ -174,7 +184,7 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
         panelWidth = Mth.clamp((usable - panelGap * 2) / 3, 120, PANEL_WIDTH);
         int contentWidth = panelWidth * 3 + panelGap * 2;
         // 左栏最后一行控件在 top + 168 处结束，面板至少要比它多留一点边距
-        panelHeight = Mth.clamp(logicalHeight - MARGIN * 2, 206, 250);
+        panelHeight = Mth.clamp(logicalHeight - MARGIN * 2, 222, 250);
         originX = (logicalWidth - contentWidth) / 2;
         originY = (logicalHeight - panelHeight) / 2;
     }
@@ -182,6 +192,14 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
     /** Shows only the controls belonging to the selected placement mode. */
     private void railControlsVisible(BlueprintMode mode, boolean keep) {
         boolean curve = mode == BlueprintMode.CURVE;
+        if (curveAngleSlider != null) {
+            curveAngleSlider.visible = curve;
+            curveAngleSlider.active = curve;
+        }
+        if (curveFitSlider != null) {
+            curveFitSlider.visible = curve;
+            curveFitSlider.active = curve;
+        }
         if (radiusSlider != null) {
             radiusSlider.visible = curve;
             radiusSlider.active = curve;
@@ -316,8 +334,13 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
         graphics.drawString(font, Component.translatable("gui.vastseatrain.section.track"),
                 leftX + PADDING, top + PADDING, 0xFFD27F);
         if (settings.isCurve()) {
+            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_angle",
+                            settings.curveAngle()), leftX + PADDING, top + 42, 0xA0A0A0);
             graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_radius",
-                            settings.curveRadius()), leftX + PADDING, top + 84, 0xA0A0A0);
+                            settings.curveRadius()), leftX + PADDING, top + 70, 0xA0A0A0);
+            graphics.drawString(font, Component.translatable("gui.vastseatrain.curve_fit.label",
+                            String.format(Locale.ROOT, "%.2f", settings.curveFitTolerance())),
+                    leftX + PADDING, top + 132, 0xA0A0A0);
         } else {
             graphics.drawString(font, Component.translatable("gui.vastseatrain.angle_value",
                             settings.lineAngle()), leftX + PADDING, top + 77, 0xA0A0A0);
@@ -351,6 +374,18 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
             summaryY = drawWrapped(graphics,
                     Component.translatable("gui.vastseatrain.curve_radius", settings.curveRadius()),
                     summaryX, summaryY, summaryWidth);
+            summaryY = drawWrapped(graphics, Component.translatable("summary.vastseatrain.curve_angle",
+                    settings.curveAngle()), summaryX, summaryY, summaryWidth);
+            boolean fitValid = settings.curveFitValid();
+            summaryY = drawWrapped(graphics, Component.translatable("summary.vastseatrain.curve_fit",
+                    String.format(Locale.ROOT, "%.3f", settings.curveFitDistance()),
+                    String.format(Locale.ROOT, "%.2f", settings.curveFitTolerance()),
+                    Component.translatable(fitValid ? "summary.vastseatrain.curve_fit_ok"
+                            : "summary.vastseatrain.curve_fit_failed")),
+                    summaryX, summaryY, summaryWidth, fitValid ? 0xFFFFFF : 0xFFFF5555);
+            summaryY = drawWrapped(graphics, Component.translatable("summary.vastseatrain.curve_length",
+                    String.format(Locale.ROOT, "%.2f", VTConfig.curveArcLength(
+                            settings.curveRadius(), settings.curveAngle()))), summaryX, summaryY, summaryWidth);
             summaryY = drawWrapped(graphics, turnLabel(), summaryX, summaryY, summaryWidth);
             summaryY = drawWrapped(graphics,
                     Component.translatable("gui.vastseatrain.curve_estimate", estimatedModelPieces),
@@ -449,38 +484,80 @@ public class TrackBlueprintScreen extends AdaptiveScreen {
         return false;
     }
 
-    /** Curve radius slider retained for the existing 90-degree curve workflow. */
-    private static final class RadiusSlider extends AbstractSliderButton {
+    private static final class CurveValueSlider extends AbstractSliderButton {
+        private final int min;
+        private final int max;
         private final IntConsumer onChange;
 
-        RadiusSlider(int x, int y, int width, int height, int radius, IntConsumer onChange) {
-            super(x, y, width, height, Component.empty(), toRatio(radius));
+        CurveValueSlider(int x, int y, int width, int height, int min, int max,
+                         int initial, IntConsumer onChange) {
+            super(x, y, width, height, Component.empty(), ratio(initial, min, max));
+            this.min = min;
+            this.max = max;
             this.onChange = onChange;
             updateMessage();
         }
 
-        private static double toRatio(int radius) {
-            int min = VTConfig.minRadius();
-            int max = VTConfig.maxRadius();
-            return max <= min ? 0.0D : (double) (VTConfig.clampRadius(radius) - min) / (max - min);
+        private static double ratio(int value, int min, int max) {
+            return max <= min ? 0.0D : (double) (Mth.clamp(value, min, max) - min) / (max - min);
+        }
+
+        private int current() {
+            return Mth.clamp(min + (int) Math.round(value * (max - min)), min, max);
+        }
+
+        @Override protected void updateMessage() { setMessage(Component.empty()); }
+
+        @Override
+        protected void applyValue() {
+            int selected = current();
+            value = ratio(selected, min, max);
+            onChange.accept(selected);
+        }
+    }
+
+    /** Radius slider whose upper bound follows the selected sweep angle. */
+    private static final class RadiusSlider extends AbstractSliderButton {
+        private final IntConsumer onChange;
+        private int angle;
+
+        RadiusSlider(int x, int y, int width, int height, int angle, int radius, IntConsumer onChange) {
+            super(x, y, width, height, Component.empty(), toRatio(radius, angle));
+            this.angle = angle;
+            this.onChange = onChange;
+            updateMessage();
+        }
+
+        private static double toRatio(int radius, int angle) {
+            int min = VTConfig.minCurveRadius(angle);
+            int max = VTConfig.maxCurveRadius(angle);
+            if (max <= min) return 0.0D;
+            double logRange = Math.log((double) max / min);
+            return logRange <= 0.0D ? 0.0D
+                    : Math.log((double) VTConfig.clampCurveRadius(radius, angle) / min) / logRange;
         }
 
         private int currentRadius() {
-            int min = VTConfig.minRadius();
-            int max = VTConfig.maxRadius();
-            return VTConfig.clampRadius(min + (int) Math.round(value * (max - min)));
+            int min = VTConfig.minCurveRadius(angle);
+            int max = VTConfig.maxCurveRadius(angle);
+            if (max <= min) return min;
+            double radius = min * Math.exp(value * Math.log((double) max / min));
+            return VTConfig.clampCurveRadius((int) Math.round(radius), angle);
         }
 
-        @Override
-        protected void updateMessage() {
-            setMessage(Component.empty());
-        }
+        @Override protected void updateMessage() { setMessage(Component.empty()); }
 
         @Override
         protected void applyValue() {
             int radius = currentRadius();
-            value = toRatio(radius);
+            value = toRatio(radius, angle);
             onChange.accept(radius);
+        }
+
+        void setAngle(int angle, int radius) {
+            this.angle = angle;
+            value = toRatio(radius, angle);
+            updateMessage();
         }
     }
 

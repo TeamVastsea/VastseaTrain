@@ -20,5 +20,19 @@ public interface TrackPlacementPlan {
         double offsetX();
 
         double offsetZ();
+
+        default int curveRadius() { return 0; }
+
+        default double curveSweep() { return 0.0D; }
+
+        default double curveArc() { return 0.0D; }
+
+        default double curveEntryAngle() { return angle(); }
+
+        default double fitAdvance() { return 0.0D; }
+
+        default double fitInward() { return 0.0D; }
+
+        default boolean curveLeft() { return false; }
     }
 }

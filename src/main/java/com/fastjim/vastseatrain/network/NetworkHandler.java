@@ -10,7 +10,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  * 否则专用服务器上通道会缺失，登录时的版本握手失败。
  */
 public final class NetworkHandler {
-    private static final String PROTOCOL = "3";
+    private static final String PROTOCOL = "4";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(VastseaTrain.MOD_ID, "main"),

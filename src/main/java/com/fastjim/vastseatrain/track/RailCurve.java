@@ -4,14 +4,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
 /**
- * 90° 弯道的平面几何，是服务端铺设、客户端渲染、摘要显示共用的“唯一真相”。
+ * 弯道的平面几何，是服务端铺设、客户端渲染、摘要显示共用的“唯一真相”。
  * <h2>约定</h2>
  * <ul>
  *     <li>轨距中心半径 {@code R}（格），单根钢轨到轨距中心 {@link #HALF_GAUGE}（从美术模型的钢轨位置实测）。</li>
  *     <li>{@code start} 是入口格，{@code entry} 是进入弯道时的前进方向；弧长参数 {@code s} 从入口格中心起算。</li>
  *     <li>圆心 = 入口格中心 + {@code R} × 弯心方向，所以 {@code s = 0} 处的点就是入口格中心、切线就是 {@code entry}，
  *     与前面的直道严丝合缝。</li>
- *     <li>{@code s = 0..πR/2} 就是整条弯，条带如何摆放见 {@link CurvePlan}。</li>
+ *     <li>{@code s = 0..R×sweep} 就是整条弯，条带如何摆放见 {@link CurvePlan}。</li>
  * </ul>
  * 世界 X 向东、Z 向南；方块 {@code (x,y,z)} 占 {@code [x,x+1] × [z,z+1]}。
  */
@@ -32,7 +32,11 @@ public final class RailCurve {
 
     /** 弯道总弧长（轨距中心，格）。 */
     public static double length(int radius) {
-        return ANGLE * radius;
+        return length(radius, ANGLE);
+    }
+
+    public static double length(int radius, double sweep) {
+        return Math.max(1, radius) * Math.max(0.0D, sweep);
     }
 
     public static double directionX(Direction dir) {        return switch (dir) {
@@ -59,8 +63,8 @@ public final class RailCurve {
     public static Direction inward(Direction entry, boolean left) {
         double ex = directionX(entry);
         double ez = directionZ(entry);
-        // 左转 = 逆时针：世界坐标里 (x, z) 旋转 +90° 得到 (-z, x)
-        return left ? directionOf(-ez, ex) : directionOf(ez, -ex);
+        // 世界 Z 轴向南，因此地图上的左侧是 (ez, -ex)。
+        return left ? directionOf(ez, -ex) : directionOf(-ez, ex);
     }
 
     /**
@@ -70,7 +74,7 @@ public final class RailCurve {
      * 不能用 {@code getClockWise} / {@code getCounterClockWise}：它们在 1.20.1 里名字与方向相反，
      * 按名字判断会把左弯画成右弯。这里用切线在入口方向上的分量判断“转向了多少”，不依赖命名。
      */
-    private static Direction directionOf(double x, double z) {
+    public static Direction directionOf(double x, double z) {
         if (Math.abs(x) >= Math.abs(z)) {
             return x >= 0 ? Direction.EAST : Direction.WEST;
         }
@@ -94,17 +98,21 @@ public final class RailCurve {
         public final Direction entry;
         public final Direction exit;
         public final boolean left;
+        public final double sweep;
         final double ux;
         final double uz;
         final double vx;
         final double vz;
 
-        Frame(int radius, BlockPos start, Direction entry, boolean left) {
+        Frame(int radius, BlockPos start, Direction entry, boolean left, double sweep) {
             this.radius = Math.max(1, radius);
             this.entry = entry;
             this.left = left;
-            this.exit = RailCurve.exit(entry, left);
+            this.sweep = Math.max(0.0D, Math.min(ANGLE, sweep));
             Direction inward = RailCurve.inward(entry, left);
+            this.exit = directionOf(
+                    directionX(entry) * Math.cos(this.sweep) + directionX(inward) * Math.sin(this.sweep),
+                    directionZ(entry) * Math.cos(this.sweep) + directionZ(inward) * Math.sin(this.sweep));
             this.centerX = start.getX() + 0.5D + directionX(inward) * this.radius;
             this.centerZ = start.getZ() + 0.5D + directionZ(inward) * this.radius;
             this.ux = -directionX(inward);
@@ -130,6 +138,39 @@ public final class RailCurve {
         public double pointZ(double s) {
             double t = s / radius;
             return centerZ + radius * (uz * Math.cos(t) + vz * Math.sin(t));
+        }
+
+        public double fittedX(double s, double fitAdvance, double fitInward, double total) {
+            double t = total <= 0.0D ? 1.0D : Math.max(0.0D, Math.min(1.0D, s / total));
+            double blend = t * t * (3.0D - 2.0D * t);
+            return pointX(s) + blend * (fitAdvance * directionX(entry)
+                    + fitInward * directionX(RailCurve.inward(entry, left)));
+        }
+
+        public double fittedZ(double s, double fitAdvance, double fitInward, double total) {
+            double t = total <= 0.0D ? 1.0D : Math.max(0.0D, Math.min(1.0D, s / total));
+            double blend = t * t * (3.0D - 2.0D * t);
+            return pointZ(s) + blend * (fitAdvance * directionZ(entry)
+                    + fitInward * directionZ(RailCurve.inward(entry, left)));
+        }
+
+        private double fittedTangentX(double s, double fitAdvance, double fitInward, double total) {
+            double t = total <= 0.0D ? 1.0D : Math.max(0.0D, Math.min(1.0D, s / total));
+            double blendDerivative = total <= 0.0D ? 0.0D : 6.0D * t * (1.0D - t) / total;
+            return tangentX(s) + blendDerivative * (fitAdvance * directionX(entry)
+                    + fitInward * directionX(RailCurve.inward(entry, left)));
+        }
+
+        private double fittedTangentZ(double s, double fitAdvance, double fitInward, double total) {
+            double t = total <= 0.0D ? 1.0D : Math.max(0.0D, Math.min(1.0D, s / total));
+            double blendDerivative = total <= 0.0D ? 0.0D : 6.0D * t * (1.0D - t) / total;
+            return tangentZ(s) + blendDerivative * (fitAdvance * directionZ(entry)
+                    + fitInward * directionZ(RailCurve.inward(entry, left)));
+        }
+
+        public double fittedModelAngle(double s, double fitAdvance, double fitInward, double total) {
+            return Math.atan2(-fittedTangentZ(s, fitAdvance, fitInward, total),
+                    -fittedTangentX(s, fitAdvance, fitInward, total));
         }
 
         /** 弧长处的单位切线 {@code (tangentX, tangentZ)}。 */
@@ -201,7 +242,11 @@ public final class RailCurve {
     }
 
     public static Frame frame(BlockPos start, Direction entry, boolean left, int radius) {
-        return new Frame(radius, start, entry, left);
+        return frame(start, entry, left, radius, ANGLE);
+    }
+
+    public static Frame frame(BlockPos start, Direction entry, boolean left, int radius, double sweep) {
+        return new Frame(radius, start, entry, left, sweep);
     }
 
     /** 一块道床覆盖的弧长（格）。模型沿长度方向的半长 0.801+，所以接缝余量按 0.8 算。 */
